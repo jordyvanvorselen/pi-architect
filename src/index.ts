@@ -19,10 +19,10 @@ import { planSlices, prepareSliceArgs, SliceParams, type SliceDetails } from "./
 import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
-import { decisionCard } from "./ui/decision/index.ts";
+import { createDecisionCard } from "./ui/decision/index.ts";
 import { choiceEntry, SpanView, verdictEntry } from "./ui/entries.ts";
 import type { Paint } from "./ui/paint.ts";
-import { phaseReview } from "./ui/review/index.ts";
+import { createPhaseReview } from "./ui/review/index.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
 import { renderBuildProgress, type BuildView } from "./ui/progress.ts";
 import { sliceCall, sliceResult } from "./ui/slice.ts";
@@ -49,7 +49,10 @@ export interface ArchitectOverrides {
 	review?: ReviewUi;
 	/** Replaces the decision card. */
 	decide?: DecisionUi;
+	/** The clock, for event times and the input grace period of the decision card and review screens. */
 	now?: () => number;
+	/** How long the decision card and review screens ignore ↵ after they open, in ms. Default 300. */
+	inputGrace?: number;
 	/** Where plan files go, relative to the cwd or absolute. Beats the flag. Default `docs/plans`. */
 	planDir?: string;
 	/** Copies text to the clipboard, for `/plan copy`. */
@@ -63,7 +66,8 @@ const textOf = (result: { content: { type: string; text?: string }[] }) =>
 
 export default function architectExtension(pi: ExtensionAPI, overrides: ArchitectOverrides = {}): void {
 	const now = overrides.now ?? Date.now;
-	const review = overrides.review ?? phaseReview;
+	const grace = { now, ...(overrides.inputGrace !== undefined ? { graceMs: overrides.inputGrace } : {}) };
+	const review = overrides.review ?? createPhaseReview({}, grace);
 	let state: ArchitectState = INITIAL_STATE;
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
@@ -314,7 +318,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	});
 
 	registerDiagramTool(pi, { state: () => state, append, has });
-	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? decisionCard });
+	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? createDecisionCard(grace) });
 
 	pi.registerTool({
 		name: "architect_slice",

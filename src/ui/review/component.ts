@@ -1,5 +1,6 @@
 import { Key, matchesKey, type Component, type Focusable, type TUI } from "@earendil-works/pi-tui";
 import type { ReviewAnswer, ReviewRequest } from "../../review.ts";
+import { InputGrace, type GraceOptions } from "../grace.ts";
 import { InlineEditor } from "../inline-editor.ts";
 import type { Paint } from "../paint.ts";
 import { paintLine, type Line } from "../spans.ts";
@@ -12,6 +13,7 @@ const SPARE_ROWS = 4;
 /**
  * The interactive Phase Review screen. ↑/↓, PgUp/PgDn and Home/End scroll; ↵ approves; `r` opens an inline
  * editor for the requested changes; esc steps back from the editor or closes the screen.
+ * Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
  * Calls `done` once, with the verdict or undefined.
  */
 export class ReviewScreen implements Component, Focusable {
@@ -30,6 +32,7 @@ export class ReviewScreen implements Component, Focusable {
 	private bodyCache: { width: number; lines: Line[] } | undefined;
 	private cache: { width: number; lines: string[] } | undefined;
 	private hasFocus = false;
+	private readonly grace: InputGrace;
 
 	constructor(
 		tui: TUI,
@@ -37,7 +40,9 @@ export class ReviewScreen implements Component, Focusable {
 		request: ReviewRequest,
 		body: ReviewBody,
 		done: (answer: ReviewAnswer | undefined) => void,
+		grace: GraceOptions = {},
 	) {
+		this.grace = new InputGrace(grace);
 		this.tui = tui;
 		this.paint = paint;
 		this.request = request;
@@ -91,6 +96,8 @@ export class ReviewScreen implements Component, Focusable {
 		else if (matchesKey(data, Key.pageDown) || matchesKey(data, Key.space)) this.scrollTo(this.scroll + page);
 		else if (matchesKey(data, Key.home)) this.scrollTo(0);
 		else if (matchesKey(data, Key.end)) this.scrollTo(this.maxScroll);
+		else if (matchesKey(data, Key.escape)) this.done(undefined);
+		else if (this.grace.active) return;
 		else if (matchesKey(data, Key.enter)) this.done({ verdict: "approved" });
 		else if (matchesKey(data, "r")) {
 			this.mode = "changes";
@@ -101,7 +108,7 @@ export class ReviewScreen implements Component, Focusable {
 			});
 			this.editor.focused = this.hasFocus;
 			this.changed();
-		} else if (matchesKey(data, Key.escape)) this.done(undefined);
+		}
 	}
 
 	private bodyLines(inner: number): Line[] {

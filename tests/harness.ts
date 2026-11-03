@@ -157,7 +157,8 @@ export function harness(
 		},
 	};
 
-	ext(pi as never, { now: () => ++clock, ...options.overrides });
+	// No input grace by default, so scripted keys land at once. Tests of the grace period pass their own.
+	ext(pi as never, { now: () => ++clock, inputGrace: 0, ...options.overrides });
 
 	const fire = async (event: string, payload: object = {}) => {
 		let result: unknown;

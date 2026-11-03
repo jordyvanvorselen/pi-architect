@@ -5,6 +5,7 @@ import type { Phase } from "../src/state/phases.ts";
 import { PHASES } from "../src/state/phases.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
+import { GRACE_MS, InputGrace, type GraceOptions } from "../src/ui/grace.ts";
 import { moduleTree } from "../src/ui/review/explore.ts";
 import { createPhaseReview, phaseReview, REVIEW_BODIES, renderReview, ReviewScreen } from "../src/ui/review/index.ts";
 import { reviewGeometry } from "../src/ui/review/screen.ts";
@@ -99,7 +100,14 @@ export const ARCH: Architecture = {
 	],
 };
 
-function screen(phase: Phase, arch: Architecture = ARCH, rows = 200, summary?: string) {
+/** A screen without the input grace period unless `grace` says otherwise, so keys land at once. */
+function screen(
+	phase: Phase,
+	arch: Architecture = ARCH,
+	rows = 200,
+	summary?: string,
+	grace: GraceOptions = { graceMs: 0 },
+) {
 	const answers: (ReviewAnswer | undefined)[] = [];
 	const request: ReviewRequest = { arch, phase, ...(summary ? { summary } : {}) };
 	const component = new ReviewScreen(
@@ -108,6 +116,7 @@ function screen(phase: Phase, arch: Architecture = ARCH, rows = 200, summary?: s
 		request,
 		REVIEW_BODIES[phase],
 		(a) => answers.push(a),
+		grace,
 	);
 	component.focused = true;
 	const keys = (...data: string[]) => data.forEach((d) => component.handleInput(d));
@@ -406,7 +415,10 @@ describe("phase review keys", () => {
 describe("the review screen entry point", () => {
 	it("runs inline and reports Pi as waiting", async () => {
 		const ui = new FakeUi().keys([KEYS.enter]);
-		const answer = await phaseReview({ arch: ARCH, phase: "decide" }, { mode: "tui", ui } as never);
+		const answer = await createPhaseReview({}, { graceMs: 0 })({ arch: ARCH, phase: "decide" }, {
+			mode: "tui",
+			ui,
+		} as never);
 		assert.deepEqual(answer, { verdict: "approved" });
 		assert.deepEqual(ui.customs[0]!.options, { blocked: { kind: "question", message: "Review Decide" } });
 	});
@@ -446,5 +458,58 @@ describe("the review screen entry point", () => {
 		assert.equal(reviewGeometry(50).padX, 1);
 		const changes = renderReview({ phase: "frame", body, scroll: 0, mode: "changes" }, 80);
 		assert.ok(changes.lines.some((l) => paintLine(l, plainTheme).includes("What should change")));
+	});
+});
+
+describe("review screen grace period", () => {
+	it("lasts 300 ms by default", () => {
+		let t = 5_000;
+		const grace = new InputGrace({ now: () => t });
+		assert.equal(GRACE_MS, 300);
+		assert.equal(grace.active, true);
+		t += 299;
+		assert.equal(grace.active, true);
+		t += 1;
+		assert.equal(grace.active, false);
+		assert.equal(new InputGrace({ now: () => t, graceMs: 0 }).active, false);
+	});
+
+	it("ignores ↵ and r for 300 ms after it opens, while scrolling still works", () => {
+		let t = 0;
+		const s = screen("blueprint", ARCH, 14, undefined, { now: () => t });
+		s.lines(80);
+		s.keys(KEYS.enter, "r");
+		assert.deepEqual(s.answers, [], "a stray ↵ does not approve");
+		assert.equal(s.component.state.mode, "browse", "no editor opens");
+		s.keys(KEYS.down, KEYS.down);
+		assert.equal(s.component.state.scroll, 2);
+		t = 300;
+		s.keys(KEYS.enter);
+		assert.deepEqual(s.answers, [{ verdict: "approved" }]);
+	});
+
+	it("still closes with esc during the grace period", () => {
+		const s = screen("frame", ARCH, 200, undefined, { now: () => 0 });
+		s.keys(KEYS.escape);
+		assert.deepEqual(s.answers, [undefined]);
+	});
+
+	it("the extension uses its clock, so a ↵ right after architect_advance does not approve", async () => {
+		const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
+		let t = 10_000;
+		const ui = new FakeUi().keys([KEYS.enter, () => (t += 300), KEYS.enter]);
+		const h = harness({
+			ui,
+			branch: [
+				entry({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
+				entry({ type: "mode", mode: "architect", at: 2 }),
+			],
+			overrides: { now: () => t, inputGrace: 300 },
+		});
+		await h.fire("session_start", { reason: "resume" });
+		await h.call("architect_update", { brief: { goal: "g", doneWhen: ["d"] } });
+		await h.call("architect_advance", {});
+		assert.equal(ui.customs[0]!.frames.length, 3, "the first ↵ was ignored");
+		assert.equal(h.entries.filter((e) => e.data.type === "verdict").length, 1);
 	});
 });

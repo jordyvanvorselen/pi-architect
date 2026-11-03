@@ -1,5 +1,6 @@
 import { Key, matchesKey, type Component, type Focusable, type TUI } from "@earendil-works/pi-tui";
 import type { DecisionAnswer, DecisionRequest } from "../../decision.ts";
+import { InputGrace, type GraceOptions } from "../grace.ts";
 import { InlineEditor } from "../inline-editor.ts";
 import type { Paint } from "../paint.ts";
 import { paintLine } from "../spans.ts";
@@ -11,6 +12,7 @@ const SPARE_ROWS = 4;
 /**
  * The interactive decision card. ←/→, tab and 1–4 move between options; ↵ chooses; `c` chooses with a
  * comment, `n` proposes an own option and `?` asks a question, each in an inline editor; esc closes.
+ * Right after the card opens, ↵, `c`, `n` and `?` are ignored for a moment (see `InputGrace`).
  * Calls `done` once, with the answer or undefined.
  */
 export class DecisionCard implements Component, Focusable {
@@ -25,8 +27,16 @@ export class DecisionCard implements Component, Focusable {
 	private readonly drafts = new Map<DecisionMode, string>();
 	private cache: { width: number; lines: string[] } | undefined;
 	private hasFocus = false;
+	private readonly grace: InputGrace;
 
-	constructor(tui: TUI, paint: Paint, request: DecisionRequest, done: (answer: DecisionAnswer | undefined) => void) {
+	constructor(
+		tui: TUI,
+		paint: Paint,
+		request: DecisionRequest,
+		done: (answer: DecisionAnswer | undefined) => void,
+		grace: GraceOptions = {},
+	) {
+		this.grace = new InputGrace(grace);
 		this.tui = tui;
 		this.paint = paint;
 		this.request = request;
@@ -99,12 +109,13 @@ export class DecisionCard implements Component, Focusable {
 		if (matchesKey(data, Key.left) || matchesKey(data, Key.up) || matchesKey(data, Key.shift("tab"))) this.move(-1);
 		else if (matchesKey(data, Key.right) || matchesKey(data, Key.down) || matchesKey(data, Key.tab)) this.move(1);
 		else if (/^[1-4]$/.test(data) && Number(data) <= count) this.move(Number(data) - 1 - this.focus);
+		else if (matchesKey(data, Key.escape)) this.done(undefined);
+		else if (this.grace.active) return;
 		else if (matchesKey(data, Key.enter))
 			this.done({ kind: "choose", option: this.request.decision.options[this.focus]!.id });
 		else if (matchesKey(data, "c")) this.open("comment");
 		else if (matchesKey(data, "n")) this.open("own");
 		else if (matchesKey(data, "?") || matchesKey(data, "shift+/")) this.open("ask");
-		else if (matchesKey(data, Key.escape)) this.done(undefined);
 	}
 
 	render(width: number): string[] {
