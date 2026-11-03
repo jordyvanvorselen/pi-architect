@@ -120,4 +120,11 @@ describe("missing", () => {
 		]);
 		assert.deepEqual(missing(at({ phase: "slice", slices: [slice("s1")] })), []);
 	});
+
+	it("Slice needs no slices while no tool can add them", () => {
+		assert.deepEqual(
+			missing(at({ phase: "slice" }), (tool) => tool !== "architect_slice"),
+			[],
+		);
+	});
 });

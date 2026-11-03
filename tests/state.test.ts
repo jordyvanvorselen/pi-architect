@@ -162,7 +162,7 @@ describe("update", () => {
 				risks: [{ id: "r1", text: "x", severity: "low" }],
 			},
 			{ type: "decision", decision },
-			{ type: "diagram", diagram: { id: "g1", title: "flow", kind: "graph", data: {} } },
+			{ type: "diagram", diagram: { id: "g1", phase: "design", title: "flow", body: "a ──▶ b" } },
 			{ type: "slices", slices: [{ id: "s1", title: "one", dependsOn: [], files: [], steps: [], verify: [] }] },
 			{ type: "update", phase: "explore", remove: ["src/api", "f1", "r1", "d1", "g1", "s1"] },
 		);
@@ -212,9 +212,9 @@ describe("decisions, diagrams and slices", () => {
 	it("upserts diagrams by id", () => {
 		const state = replay(
 			...started,
-			{ type: "diagram", diagram: { id: "g1", title: "v1", kind: "graph", data: { nodes: [] } } },
-			{ type: "diagram", diagram: { id: "g1", title: "v2", kind: "graph", data: { nodes: [1] } } },
-			{ type: "diagram", diagram: { id: "g2", title: "calls", kind: "sequence", data: {} } },
+			{ type: "diagram", diagram: { id: "g1", phase: "design", title: "v1", body: "a" } },
+			{ type: "diagram", diagram: { id: "g1", phase: "design", title: "v2", body: "a ──▶ b" } },
+			{ type: "diagram", diagram: { id: "g2", phase: "design", title: "calls", body: "x", caption: "c" } },
 		);
 		assert.deepEqual(
 			arch(state).diagrams.map((d) => d.title),
