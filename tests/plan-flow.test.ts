@@ -213,7 +213,9 @@ describe("build mode progress", () => {
 
 	it("shows the plan's slices from the file", async () => {
 		const { ui } = await building();
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key          ctrl+alt+b board",
+		]);
 		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 30), [" ▸ BUILD  ●1   slice 1/1"]);
 	});
 
@@ -226,7 +228,9 @@ describe("build mode progress", () => {
 		await h.fire("tool_result", { toolName: "edit", input: { path: planPath }, isError: true });
 		assert.match(ui.widgetLines(WIDGET_KEY, 80)![0]!, /●1/, "a failed edit does not re-read the plan");
 		await h.fire("tool_result", { toolName: "edit", input: { path: `@${planPath}` }, isError: false });
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  ✓1   all 1 slice done"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  ✓1   all 1 slice done                   ctrl+alt+b board",
+		]);
 		assert.ok(ui.renders > renders);
 	});
 
@@ -256,16 +260,20 @@ describe("build mode progress", () => {
 		const { h, ui, file } = await building();
 		writeFileSync(file, "");
 		await h.fire("agent_end", {});
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  no slices"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  no slices                               ctrl+alt+b board",
+		]);
 		const { rmSync } = await import("node:fs");
 		rmSync(file);
 		await h.fire("agent_end", {});
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  ●1   plan file not found · /plan"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  ●1   plan file not found · /plan        ctrl+alt+b board",
+		]);
 
 		const unwritten = await approved();
 		await unwritten.command("mode", "build");
 		assert.deepEqual(unwritten.ui!.widgetLines(WIDGET_KEY, 80), [
-			" ▸ BUILD  plan: dedupe  ●1   plan not written · /plan write",
+			" ▸ BUILD  plan: dedupe  ●1   plan not written · /plan write     ctrl+alt+b board",
 		]);
 	});
 
@@ -433,7 +441,9 @@ describe("/plan", () => {
 		const next = harness({ ui, cwd: h.cwd, branch: appended });
 		await next.fire("session_start", { reason: "new" });
 		assert.equal(rebuild(next.branch).mode, "build");
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key          ctrl+alt+b board",
+		]);
 		assert.match((await next.startRun()).sections[SECTION]!, /docs\/plans\/dedupe\.md/);
 		await next.command("plan", "write");
 		assert.equal(ui.notifications.at(-1)!.message, `The plan file is already at ${planPath}.`);
@@ -446,7 +456,9 @@ describe("/plan", () => {
 		);
 		await next.command("plan", "build");
 		assert.equal(ui.notifications.at(-1)!.message, `The plan file ${planPath} is missing.`);
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [" ▸ BUILD  plan: dedupe  plan file not found · /plan"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
+			" ▸ BUILD  plan: dedupe  plan file not found · /plan             ctrl+alt+b board",
+		]);
 	});
 
 	it("says when the new session was cancelled", async () => {

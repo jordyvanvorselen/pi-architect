@@ -234,7 +234,9 @@ describe("persistence", () => {
 		const h = harness({ ui, branch });
 		await h.fire("session_start", { reason: "resume" });
 		assert.equal(ui.statuses.get(STATUS_KEY), "▸ build · plan approved");
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY), [" ▸ BUILD  plan: dedupe  plan not written · /plan write"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY), [
+			" ▸ BUILD  plan: dedupe  plan not written · /plan write                                                  ctrl+alt+b board",
+		]);
 	});
 });
 

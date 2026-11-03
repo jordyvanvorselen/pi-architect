@@ -64,7 +64,7 @@ describe("renderDiagram", () => {
 			"The processor drops duplicates before they reach",
 			"the backend.",
 			"■ new  ■ changed",
-			"67 cols wide · open /board to see it all",
+			"67 cols wide · open /architect board to see it all",
 		]);
 		const wide = renderDiagram(EXAMPLE, 66, plainTheme, { fullView: "the board" });
 		assert.equal(wide.at(-1), "diagram is 67 cols wide, widen the terminal or open the board");

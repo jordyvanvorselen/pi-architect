@@ -52,7 +52,7 @@ export interface BlueprintCounts {
 }
 
 /**
- * Everything the plan file holds, in plan order. The Blueprint review screen and `/board` render this,
+ * Everything the plan file holds, in plan order. The Blueprint review screen and the board render this,
  * and `renderPlan` writes it as markdown, so what the user approves is what the builder reads.
  */
 export interface Blueprint {
