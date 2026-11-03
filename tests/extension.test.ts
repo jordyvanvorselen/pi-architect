@@ -20,7 +20,7 @@ async function architecting(ui = new FakeUi()) {
 describe("registration", () => {
 	it("registers the architect tools inactive, with prompt text that names each tool", () => {
 		const h = harness();
-		for (const name of ["architect_update", "architect_advance"]) {
+		for (const name of ["architect_update", "architect_advance", "architect_diagram"]) {
 			const tool = h.tools[name]!;
 			assert.equal(tool.defaultActive, false);
 			assert.ok(tool.promptSnippet);
@@ -435,7 +435,9 @@ describe("architect_advance", () => {
 		await h.call("architect_update", { brief: { goal: "g", done_when: ["d"] } });
 		await h.call("architect_advance", {});
 		await h.call("architect_update", { modules: [{ path: "src/ingest", role: "touched" }] });
-		for (let i = 0; i < 4; i++) await h.call("architect_advance", {});
+		for (let i = 0; i < 2; i++) await h.call("architect_advance", {});
+		await h.call("architect_diagram", { title: "Flow", body: "A ──▶ B" });
+		for (let i = 0; i < 2; i++) await h.call("architect_advance", {});
 		const final = await h.call("architect_advance", {});
 		assert.deepEqual(seen, [
 			"frame:review",

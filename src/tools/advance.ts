@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { phaseGuidance, type ToolCheck } from "../prompt.ts";
+import { diagramRules, phaseGuidance, type ToolCheck } from "../prompt.ts";
 import type { ReviewUi } from "../review.ts";
 import type { EventInput } from "../state/events.ts";
 import { nextPhase, PHASE_LABEL, PHASES, phaseIndex, type Phase } from "../state/phases.ts";
@@ -129,6 +129,7 @@ export async function advance(
 		[
 			`${label} approved.${note} Now in ${PHASE_LABEL[next]} (phase ${phaseIndex(next) + 1}/${PHASES.length}):`,
 			...guidance,
+			...diagramRules(next, deps.has),
 		].join("\n"),
 		{ phase, outcome: "approved", next, ...(comment ? { comment } : {}) },
 	);

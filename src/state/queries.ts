@@ -104,7 +104,9 @@ export function missing(arch: Architecture, has: (tool: string) => boolean = () 
 			return open.length ? [`answers to open decisions ${open.join(", ")}`] : [];
 		}
 		case "design":
-			return [];
+			return has("architect_diagram") && !arch.diagrams.some((d) => d.phase === "design")
+				? ["at least one diagram"]
+				: [];
 		case "slice": {
 			if (!has("architect_slice")) return [];
 			if (!arch.slices.length) return ["at least one slice"];

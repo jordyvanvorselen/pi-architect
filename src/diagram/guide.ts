@@ -33,5 +33,18 @@ export function diagramGuide(maxWidth = DEFAULT_MAX_WIDTH): string {
 	].join("\n");
 }
 
+/**
+ * Widest diagram to ask the model for: the terminal minus the card and tool padding, between 60 and 100 columns.
+ * Narrower terminals still get 60, because the card scrolls and a cramped drawing helps nobody.
+ */
+export function diagramMaxWidth(columns: number | undefined = terminalColumns()): number {
+	if (!columns || !Number.isFinite(columns)) return DEFAULT_MAX_WIDTH;
+	return Math.max(60, Math.min(DEFAULT_MAX_WIDTH, Math.floor(columns) - 8));
+}
+
+function terminalColumns(): number | undefined {
+	return process.stdout.isTTY ? process.stdout.columns : undefined;
+}
+
 /** The guide for the default width. */
 export const DIAGRAM_GUIDE = diagramGuide();

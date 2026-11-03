@@ -107,8 +107,15 @@ describe("missing", () => {
 		assert.deepEqual(missing(at({ phase: "decide" })), []);
 	});
 
-	it("Design and Blueprint need nothing extra", () => {
-		assert.deepEqual(missing(at({ phase: "design" })), []);
+	it("Design needs a diagram drawn in Design when the tool exists; Blueprint needs nothing extra", () => {
+		const diagram = (phase: "explore" | "design") => ({ id: "d1", phase, title: "t", body: "a ──▶ b" });
+		assert.deepEqual(missing(at({ phase: "design" })), ["at least one diagram"]);
+		assert.deepEqual(missing(at({ phase: "design", diagrams: [diagram("explore")] })), ["at least one diagram"]);
+		assert.deepEqual(missing(at({ phase: "design", diagrams: [diagram("design")] })), []);
+		assert.deepEqual(
+			missing(at({ phase: "design" }), (tool) => tool !== "architect_diagram"),
+			[],
+		);
 		assert.deepEqual(missing(at({ phase: "blueprint" })), []);
 	});
 

@@ -1,3 +1,4 @@
+import { diagramGuide, diagramMaxWidth } from "./diagram/guide.ts";
 import { PHASE_LABEL, PHASES, phaseIndex, type Phase } from "./state/phases.ts";
 import type { Architecture, ArchitectState, Mode } from "./state/types.ts";
 
@@ -27,7 +28,7 @@ export function phaseGuidance(phase: Phase, has: ToolCheck, arch?: Architecture)
 			return [
 				"Read the code this feature touches. Do not design yet.",
 				"Record modules with architect_update({ modules }): touched (changes), new (does not exist yet) or context (read only).",
-				"Record key findings and existing patterns with architect_update({ findings }).",
+				`Record key findings and existing patterns with architect_update({ findings }).${has("architect_diagram") ? " Sketch the current architecture with architect_diagram when a picture helps." : ""}`,
 			];
 		case "decide":
 			return [
@@ -90,7 +91,17 @@ export function architectSection(state: ArchitectState, has: ToolCheck): string 
 		...phaseGuidance(arch.phase, has, arch).map((line) => `- ${line}`),
 		"Rules:",
 		...RULES.map((line) => `- ${line}`),
+		...diagramRules(arch.phase, has),
 	].join("\n");
+}
+
+/** Phases whose work is drawing diagrams. Later phases may still revise one; the tool result guides them then. */
+const DRAWING_PHASES: readonly Phase[] = ["explore", "design"];
+
+/** How to draw diagrams the linter accepts, in the phases that draw them. */
+export function diagramRules(phase: Phase, has: ToolCheck): string[] {
+	if (!DRAWING_PHASES.includes(phase) || !has("architect_diagram")) return [];
+	return ["Drawing diagrams for architect_diagram:", diagramGuide(diagramMaxWidth())];
 }
 
 /** What the model hears, once, after the user switched mode. */

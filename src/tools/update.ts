@@ -60,7 +60,7 @@ export const UpdateParams = Type.Object(
 				),
 			),
 		),
-		remove: Type.Optional(List("Ids of findings or risks, or module paths, to remove.")),
+		remove: Type.Optional(List("Ids of findings, risks or diagrams, or module paths, to remove.")),
 	},
 	{ additionalProperties: false },
 );
@@ -245,6 +245,7 @@ export function planUpdate(
 			...arch.findings.map((f) => f.id),
 			...arch.risks.map((r) => r.id),
 			...arch.modules.map((m) => m.path),
+			...arch.diagrams.map((d) => d.id),
 		]);
 		const unknown = remove.filter((id) => !known.has(id));
 		if (unknown.length) throw new Error(`Nothing to remove with id ${unknown.join(", ")}.`);
