@@ -1,6 +1,6 @@
 import { slugify } from "../state/queries.ts";
-import type { Architecture, DecisionOption, Diagram, ModuleRole, Severity } from "../state/types.ts";
-import { buildBlueprint, type Blueprint, type BlueprintDecision } from "./blueprint.ts";
+import type { Architecture, Diagram, ModuleRole, Severity } from "../state/types.ts";
+import { buildBlueprint, type Blueprint, type BlueprintDecision, type BlueprintOption } from "./blueprint.ts";
 import type { Ordered } from "./order.ts";
 
 export interface RenderOptions {
@@ -147,13 +147,15 @@ function context(bp: Blueprint): string[] {
 	];
 }
 
-const optionName = (o: DecisionOption) => `${inline(o.id)}. ${inline(o.title)}`;
+const optionName = (o: BlueprintOption) => `${inline(o.id)}. ${inline(o.title)}`;
 
-function option(o: DecisionOption): string[] {
+function option(o: BlueprintOption): string[] {
 	return [
 		...(o.summary ? [prose(o.summary)] : []),
 		[...o.pros.map((p) => `- Pro: ${inline(p)}`), ...o.cons.map((c) => `- Con: ${inline(c)}`)].join("\n"),
-		`Effort ${o.effort}/5, risk ${o.risk}/5.`,
+		o.rating
+			? `Effort ${o.rating.effort}/5, risk ${o.rating.risk}/5.`
+			: "The user wrote this option. Nobody rated its effort or risk.",
 	].filter(Boolean);
 }
 

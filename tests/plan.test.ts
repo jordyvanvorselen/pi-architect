@@ -126,6 +126,47 @@ describe("renderPlan", () => {
 	});
 });
 
+describe("an option the user wrote", () => {
+	/** The fixture, with the user's own option chosen for q1. Its effort and risk are only placeholders. */
+	function withOwnOption(): Architecture {
+		const arch = fullArchitecture();
+		const q1 = arch.decisions[0]!;
+		q1.options.push({
+			id: "D",
+			title: "At the panel gateway",
+			summary: "The gateway drops repeats before the processor sees them.",
+			pros: [],
+			cons: [],
+			effort: 3,
+			risk: 3,
+			byUser: true,
+		});
+		q1.chosen = "D";
+		return arch;
+	}
+
+	it("has no rating in the blueprint", () => {
+		const bp = buildBlueprint(withOwnOption());
+		const chosen = bp.decisions[0]!.chosen!;
+		assert.equal(chosen.byUser, true);
+		assert.equal(chosen.rating, undefined);
+		assert.ok(!("effort" in chosen) && !("risk" in chosen));
+		assert.deepEqual(bp.decisions[0]!.rejected[0]!.option.rating, { effort: 2, risk: 1 });
+		assert.equal(bp.decisions[0]!.rejected[0]!.option.byUser, false);
+	});
+
+	it("shows in the plan as the user's, never with placeholder ratings", async () => {
+		const md = renderPlan(withOwnOption());
+		const q1 = md.slice(md.indexOf("### 1."), md.indexOf("### 2."));
+		assert.match(
+			q1,
+			/\*\*Chosen: D\. At the panel gateway\*\*\n\nThe gateway drops[^\n]*\n\nThe user wrote this option\. Nobody rated its effort or risk\./,
+		);
+		assert.doesNotMatch(q1, /Effort 3\/5|risk 3\/5/);
+		assert.equal(await pretty(md), md);
+	});
+});
+
 describe("buildBlueprint", () => {
 	it("arranges the architecture as the plan", () => {
 		const bp = buildBlueprint(fullArchitecture());
@@ -158,7 +199,10 @@ describe("buildBlueprint", () => {
 			["B", "C"],
 		);
 		assert.equal(d2!.followedRecommendation, false);
-		assert.deepEqual(d2!.rejected, [{ option: fullArchitecture().decisions[1]!.options[0], recommended: true }]);
+		const { effort, risk, ...forever } = fullArchitecture().decisions[1]!.options[0]!;
+		assert.deepEqual(d2!.rejected, [
+			{ option: { ...forever, rating: { effort, risk }, byUser: false }, recommended: true },
+		]);
 		assert.deepEqual(bp.counts, {
 			modules: 4,
 			findings: 3,

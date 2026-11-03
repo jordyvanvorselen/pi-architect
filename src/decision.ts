@@ -36,7 +36,8 @@ export function decisionLines(decision: Decision): string[] {
 	if (decision.context) lines.push(decision.context);
 	for (const o of decision.options) {
 		const star = o.id === decision.recommendation ? " ★" : "";
-		lines.push("", `${o.id}  ${o.title}${star} · effort ${o.effort}/5 · risk ${o.risk}/5`);
+		const rating = o.byUser ? "your own option" : `effort ${o.effort}/5 · risk ${o.risk}/5`;
+		lines.push("", `${o.id}  ${o.title}${star} · ${rating}`);
 		if (o.summary) lines.push(`   ${o.summary}`);
 		for (const pro of o.pros) lines.push(`   + ${pro}`);
 		for (const con of o.cons) lines.push(`   − ${con}`);

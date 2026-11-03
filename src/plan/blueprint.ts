@@ -5,6 +5,7 @@ import type {
 	DecisionOption,
 	Diagram,
 	Finding,
+	Level,
 	ModuleRef,
 	ModuleRole,
 	Risk,
@@ -12,17 +13,27 @@ import type {
 } from "../state/types.ts";
 import { buildOrder, type Ordered } from "./order.ts";
 
+/**
+ * An option as the plan shows it. An option the user wrote has no `rating`: the agent never rated it,
+ * and the placeholder numbers in the state must not reach the plan as if they were estimates.
+ */
+export type BlueprintOption = Omit<DecisionOption, "effort" | "risk" | "byUser"> & {
+	rating?: { effort: Level; risk: Level };
+	/** The user wrote this option on the decision card. */
+	byUser: boolean;
+};
+
 /** A decision as the plan shows it: what was chosen, and what was not. */
 export interface BlueprintDecision {
 	id: string;
 	question: string;
 	context?: string;
 	/** Undefined while the decision is open. An approved plan has none open. */
-	chosen?: DecisionOption;
+	chosen?: BlueprintOption;
 	/** True when the user picked the option the agent recommended. */
 	followedRecommendation: boolean;
 	/** The other options, in card order. */
-	rejected: { option: DecisionOption; recommended: boolean }[];
+	rejected: { option: BlueprintOption; recommended: boolean }[];
 	/** What the user said with the choice. */
 	comment?: string;
 }
@@ -76,8 +87,13 @@ function stable<T>(items: readonly T[], rank: (item: T) => number): T[] {
 		.map((x) => x.item);
 }
 
+function option({ effort, risk, byUser, ...rest }: DecisionOption): BlueprintOption {
+	return byUser ? { ...rest, byUser: true } : { ...rest, rating: { effort, risk }, byUser: false };
+}
+
 function decision(d: Architecture["decisions"][number]): BlueprintDecision {
-	const chosen = d.options.find((o) => o.id === d.chosen);
+	const found = d.options.find((o) => o.id === d.chosen);
+	const chosen = found && option(found);
 	return {
 		id: d.id,
 		question: d.question,
@@ -86,7 +102,7 @@ function decision(d: Architecture["decisions"][number]): BlueprintDecision {
 		followedRecommendation: chosen !== undefined && chosen.id === d.recommendation,
 		rejected: d.options
 			.filter((o) => o.id !== d.chosen)
-			.map((option) => ({ option, recommended: option.id === d.recommendation })),
+			.map((o) => ({ option: option(o), recommended: o.id === d.recommendation })),
 		...(d.comment ? { comment: d.comment } : {}),
 	};
 }
