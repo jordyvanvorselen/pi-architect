@@ -5,7 +5,7 @@ import { buildSection } from "./plan/handoff.ts";
 import { buildOrder } from "./plan/order.ts";
 import { parsePlanProgress, type SliceProgress } from "./plan/progress.ts";
 import { renderPlan } from "./plan/render.ts";
-import { DEFAULT_PLAN_DIR, displayPath, planFile, readPlan, writePlan } from "./plan/write.ts";
+import { DEFAULT_PLAN_DIR, displayPath, nextPlanPath, planFile, readPlan, writePlan } from "./plan/write.ts";
 import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, SECTION } from "./prompt.ts";
 import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
 import type { DecisionUi } from "./decision.ts";
@@ -184,11 +184,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		return overrides.planDir ?? (typeof flag === "string" && flag.trim() ? flag.trim() : DEFAULT_PLAN_DIR);
 	}
 
-	/** Where approving the Blueprint writes the plan file. A taken name gets a number when it is written. */
+	/** Where approving the Blueprint writes the plan file, with a taken name already numbered as the writer would. */
 	function planTarget(ctx: ExtensionContext): string | undefined {
 		const arch = state.architecture;
 		if (!arch) return undefined;
-		return displayPath(ctx.cwd, planFile(ctx.cwd, `${planDir()}/${arch.slug || slugify(arch.feature)}.md`));
+		const file = nextPlanPath(planFile(ctx.cwd, planDir()), arch.slug || slugify(arch.feature));
+		return file && displayPath(ctx.cwd, file);
 	}
 
 	/** Write the approved plan to a new file and record where. Never overwrites a file. */

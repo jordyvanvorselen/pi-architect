@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -9,6 +10,20 @@ const MAX_TRIES = 100;
 
 const isExists = (error: unknown) => (error as NodeJS.ErrnoException | undefined)?.code === "EEXIST";
 
+/** The names a plan file can get, in the order they are tried: `<slug>.md`, `<slug>-2.md`, `<slug>-3.md`… */
+function* candidates(dir: string, slug: string): Generator<string> {
+	for (let n = 1; n <= MAX_TRIES; n++) yield join(dir, `${slug}${n === 1 ? "" : `-${n}`}.md`);
+}
+
+/**
+ * The absolute path `writePlan` would write to now: the first name that is not taken. Undefined when every
+ * name is taken. For showing the path before the file is written; both use the same names in the same order.
+ */
+export function nextPlanPath(dir: string, slug: string): string | undefined {
+	for (const path of candidates(dir, slug)) if (!existsSync(path)) return resolve(path);
+	return undefined;
+}
+
 /**
  * Write a new plan file in `dir` as `<slug>.md`, or `<slug>-2.md`, `<slug>-3.md` and so on when the name
  * is taken. Never overwrites a file: each attempt creates the file exclusively, so a file that appears
@@ -19,8 +34,7 @@ const isExists = (error: unknown) => (error as NodeJS.ErrnoException | undefined
  */
 export async function writePlan(dir: string, slug: string, content: string): Promise<string> {
 	await mkdir(dir, { recursive: true });
-	for (let n = 1; n <= MAX_TRIES; n++) {
-		const path = join(dir, `${slug}${n === 1 ? "" : `-${n}`}.md`);
+	for (const path of candidates(dir, slug)) {
 		try {
 			await writeFile(path, content, { encoding: "utf8", flag: "wx" });
 			return resolve(path);
