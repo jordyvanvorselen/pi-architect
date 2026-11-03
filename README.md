@@ -26,7 +26,8 @@ Each Pi session has a mode. **Build** is normal Pi and the default. **Architect*
 - Edit and write are off.
 - Bash only runs read-only commands. `ls && rm x`, `echo x > file` and `$(…)` are blocked, and the agent is told why.
 - The agent records the design with `architect_update`.
-- The agent calls `architect_advance` when a phase is done. You approve it or ask for changes with a comment.
+- The agent raises each open question with `architect_decide`. A decision card shows the options side by side. You pick one, add a comment, write your own option or ask a question first.
+- The agent calls `architect_advance` when a phase is done. A review screen shows the phase. You approve it or ask for changes with a comment.
 - The agent splits the work into slices with `architect_slice`. Each slice has files, concrete steps and verify commands.
 
 When you approve the Blueprint, the plan is written to `docs/plans/<feature>.md`. An existing file is never overwritten: the name gets `-2`, `-3` and so on.
@@ -48,6 +49,9 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | `ctrl+alt+a`                     | Toggle the mode                              |
 | `pi --architect`                 | Start in architect mode                      |
 
+On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, esc closes.
+On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests changes, esc closes.
+
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
 
 The mode and the design live in the session. They survive reload and resume. Fork the session to try another answer.
@@ -56,7 +60,8 @@ The mode and the design live in the session. They survive reload and resume. For
 
 - Architect and build mode, with the switch in the transcript and in the footer.
 - Read-only mode with a checked bash allowlist.
-- The phase gate with a simple approve or request-changes dialog.
+- Decision cards, and a review screen for every phase with approve and request changes.
+- Decisions and verdicts as small cards in the transcript.
 - The brief, modules, findings and risks.
 - Slices with a checked dependency graph, the plan file and build progress.
 
