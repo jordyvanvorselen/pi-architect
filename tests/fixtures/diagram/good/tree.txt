@@ -1,0 +1,8 @@
+src/
+├── state/
+│   ├── phases.ts   [changed]
+│   └── types.ts
+├── diagram/        [new]
+│   ├── lint.ts
+│   └── render.ts
+╰── index.ts
