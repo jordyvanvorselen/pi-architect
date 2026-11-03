@@ -2,7 +2,7 @@ import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-a
 import { Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import type { DecisionAnswer, DecisionUi } from "../decision.ts";
-import type { EventInput } from "../state/events.ts";
+import { choiceSnapshot, type EventInput } from "../state/events.ts";
 import { PHASE_LABEL } from "../state/phases.ts";
 import { nextId } from "../state/queries.ts";
 import type { ArchitectState, Decision, DecisionOption, Level } from "../state/types.ts";
@@ -269,14 +269,22 @@ export async function decide(
 
 	let chosen: DecisionOption;
 	let comment: string | undefined;
+	let answered = decision;
 	if (answer.kind === "own") {
 		chosen = ownOption(decision, answer.text);
-		deps.append({ type: "decision", decision: { ...decision, options: [...decision.options, chosen] } });
+		answered = { ...decision, options: [...decision.options, chosen] };
+		deps.append({ type: "decision", decision: answered });
 	} else {
 		chosen = decision.options.find((o) => o.id === answer.option)!;
 		comment = answer.comment?.trim() || undefined;
 	}
-	deps.append({ type: "choice", id: decision.id, chosen: chosen.id, ...(comment ? { comment } : {}) });
+	deps.append({
+		type: "choice",
+		id: decision.id,
+		chosen: chosen.id,
+		...(comment ? { comment } : {}),
+		snapshot: choiceSnapshot(answered),
+	});
 
 	const open = deps
 		.state()

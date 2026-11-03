@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ENTRY_TYPE, event, type ChoiceEvent, type EventInput, type VerdictEvent } from "../src/state/events.ts";
+import {
+	choiceSnapshot,
+	ENTRY_TYPE,
+	event,
+	type ChoiceEvent,
+	type EventInput,
+	type VerdictEvent,
+} from "../src/state/events.ts";
 import type { Decision } from "../src/state/types.ts";
 import { choiceEntry, SpanView, verdictEntry } from "../src/ui/entries.ts";
 import { harness, type BranchEntry } from "./harness.ts";
@@ -52,6 +59,27 @@ describe("transcript cards", () => {
 		assert.equal(narrow[2], "  ✓ A In processor ★");
 	});
 
+	it("a choice shows the decision as it was when the user chose, not as it is now", () => {
+		const replaced: Decision = {
+			...DECISION,
+			question: "Who dedupes?",
+			options: [o("A", "Gateway"), o("B", "Database")],
+			recommendation: "B",
+		};
+		const snapshot = choiceSnapshot(DECISION);
+		assert.deepEqual(lines(choiceEntry(choice({ snapshot }), replaced, true)), [
+			"◆ q1  Where do panel events get deduplicated?",
+			`  ✓ B In backend${" ".repeat(40)}effort ▰▰▰▱▱  risk ▰▰▱▱▱`,
+			'    "only alarms"',
+			"    A  In processor ★",
+			"    C  Mine",
+		]);
+		assert.deepEqual(lines(choiceEntry(choice({ snapshot }), undefined, false), 120), [
+			'◆ q1 ✓ B In backend  "only alarms" · Where do panel events get deduplicated?',
+		]);
+		assert.match(lines(choiceEntry(choice(), replaced, false), 120)[0]!, /✓ B Database ★ .* · Who dedupes\?/);
+	});
+
 	it("a choice without its decision shows the bare answer", () => {
 		assert.deepEqual(lines(choiceEntry(noComment, undefined, true)), ["◆ q1 ✓ B"]);
 	});
@@ -88,7 +116,7 @@ describe("transcript cards", () => {
 		new SpanView(plainTheme, () => []).invalidate();
 	});
 
-	it("the extension renders choices from the current state, and verdicts", async () => {
+	it("the extension renders old choices without a snapshot from the current state, and verdicts", async () => {
 		const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
 		const h = harness({
 			branch: [
@@ -110,5 +138,30 @@ describe("transcript cards", () => {
 		assert.equal(render(choice(), true).length, 5);
 		assert.match(render(choice({ id: "q9" }))[0]!, /^◆ q9 ✓ B {2}"only alarms"$/);
 		assert.match(render(verdict())[0]!, /── ✓ Frame approved/);
+	});
+
+	it("the extension keeps an old choice card unchanged when the agent replaces the decision", async () => {
+		const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
+		const snapshot = choiceSnapshot(DECISION);
+		const replaced = { ...DECISION, chosen: undefined, options: [o("A", "Gateway"), o("B", "Database")] };
+		const h = harness({
+			branch: [
+				entry({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
+				entry({ type: "mode", mode: "architect", at: 2 }),
+				entry({ type: "decision", decision: { ...DECISION, chosen: undefined } as unknown as Decision }),
+				entry({ type: "choice", id: "q1", chosen: "B", snapshot }),
+				entry({ type: "decision", decision: replaced as unknown as Decision }),
+			],
+		});
+		await h.fire("session_start", { reason: "resume" });
+		const card = h.entryRenderers[ENTRY_TYPE]!(
+			{ type: "custom", customType: ENTRY_TYPE, data: choice({ snapshot }) },
+			{ expanded: true },
+			plainTheme,
+		) as { render(w: number): string[] };
+		const text = plain(card.render(100)).join("\n");
+		assert.match(text, /✓ B In backend/);
+		assert.match(text, /A {2}In processor ★/);
+		assert.doesNotMatch(text, /Gateway|Database/);
 	});
 });

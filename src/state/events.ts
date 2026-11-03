@@ -1,5 +1,16 @@
 import type { Phase } from "./phases.ts";
-import type { Brief, Decision, Diagram, Finding, Mode, ModuleRef, Risk, Slice, Verdict } from "./types.ts";
+import type {
+	Brief,
+	Decision,
+	DecisionOption,
+	Diagram,
+	Finding,
+	Mode,
+	ModuleRef,
+	Risk,
+	Slice,
+	Verdict,
+} from "./types.ts";
 
 /** `customType` of every session entry pi-architect appends. */
 export const ENTRY_TYPE = "architect";
@@ -71,12 +82,39 @@ export interface DecisionEvent extends Base {
 	decision: Decision;
 }
 
+/**
+ * What the transcript card of a choice shows, as it was when the user chose. The agent can later replace
+ * the decision under the same id, so the card must not look the decision up again.
+ */
+export interface ChoiceSnapshot {
+	question: string;
+	recommendation?: string;
+	options: Pick<DecisionOption, "id" | "title" | "effort" | "risk" | "byUser">[];
+}
+
 /** The user picked an option. */
 export interface ChoiceEvent extends Base {
 	type: "choice";
 	id: string;
 	chosen: string;
 	comment?: string;
+	/** Missing in events from before snapshots; the card then looks the decision up in the current state. */
+	snapshot?: ChoiceSnapshot;
+}
+
+/** The parts of a decision a choice card needs, to store with the choice. */
+export function choiceSnapshot(decision: Decision): ChoiceSnapshot {
+	return {
+		question: decision.question,
+		...(decision.recommendation ? { recommendation: decision.recommendation } : {}),
+		options: decision.options.map((o) => ({
+			id: o.id,
+			title: o.title,
+			effort: o.effort,
+			risk: o.risk,
+			...(o.byUser ? { byUser: true } : {}),
+		})),
+	};
 }
 
 /** A diagram added, or replaced by id. */
