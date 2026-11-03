@@ -303,7 +303,7 @@ describe("read-only commands", () => {
 
 describe("blockReason", () => {
 	it("blocks edit, write and powershell with a hint", () => {
-		assert.match(blockReason("edit", {})!, /edit is off in architect mode.*\/mode build/);
+		assert.match(blockReason("edit", {})!, /edit is off in architect mode.*\/architect build/);
 		assert.match(blockReason("write", {})!, /write is off/);
 		assert.match(blockReason("powershell", {})!, /powershell is off/);
 	});

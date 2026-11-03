@@ -82,7 +82,7 @@ export function architectSection(state: ArchitectState, has: ToolCheck): string 
 		return [
 			head,
 			"The user approved the Blueprint, so the plan is final. Answer questions about it.",
-			"The user switches to build mode with /mode build to build it.",
+			"The user switches to build mode with /architect build to build it.",
 			RULES[0],
 		].join("\n");
 	const status =

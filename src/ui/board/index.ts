@@ -66,7 +66,7 @@ export async function loadMarkdownTheme(): Promise<MarkdownTheme | undefined> {
 export async function openBoard(ctx: ExtensionContext, options: OpenBoardOptions): Promise<BoardComment[] | undefined> {
 	const data = options.data();
 	if (!ctx.hasUI || ctx.mode !== "tui") {
-		ctx.ui.notify("The board needs Pi's interactive terminal. /plan shows the plan.", "info");
+		ctx.ui.notify("The board needs Pi's interactive terminal. /architect plan shows the plan.", "info");
 		return undefined;
 	}
 	if (!data.arch && !data.plan) {

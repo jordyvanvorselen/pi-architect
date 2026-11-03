@@ -3,7 +3,7 @@ import { checkReadOnly } from "./commands.ts";
 /** Built-in tools that change files. Architect mode turns them off and blocks them if something turns them back on. */
 export const WRITE_TOOLS = ["edit", "write"] as const;
 
-const NOTE = "Architect mode is read-only. The user can switch to build mode with /mode build.";
+const NOTE = "Architect mode is read-only. The user can switch to build mode with /architect build.";
 
 /**
  * Why a tool call is not allowed in architect mode, or undefined when it is.
