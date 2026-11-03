@@ -4,7 +4,7 @@ import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
 import { clip, firstFit, join, paintSeg, seg, spread } from "../src/ui/paint.ts";
-import { LineComponent, renderPlanProgress, renderStepper } from "../src/ui/stepper.ts";
+import { LineComponent, renderStepper } from "../src/ui/stepper.ts";
 import { modeStatus } from "../src/ui/status.ts";
 import { assertComponentFits, assertFits, plainTheme, tagTheme, untag } from "./helpers.ts";
 
@@ -106,15 +106,6 @@ describe("stepper", () => {
 					(width, theme) => [renderStepper(arch({ phase, status }), width, theme)],
 					[10, 20, 30, 40, 60, 80, 100, 120],
 				);
-	});
-});
-
-describe("plan progress placeholder", () => {
-	it("shows the feature and the number of slices", () => {
-		const slices = [{ id: "s1", title: "t", dependsOn: [], files: [], steps: [], verify: [] }];
-		assert.equal(renderPlanProgress(arch({ slices }), 80, plainTheme), " ▸ BUILD  dedupe-panel-events · 1 slice");
-		assert.equal(renderPlanProgress(arch({ feature: "" }), 80, plainTheme), " ▸ BUILD  0 slices");
-		assertFits((width, theme) => [renderPlanProgress(arch(), width, theme)]);
 	});
 });
 

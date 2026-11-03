@@ -1,5 +1,11 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text, type AutocompleteItem, type TUI } from "@earendil-works/pi-tui";
+import { planCommand, PLAN_SUBCOMMANDS } from "./plan/command.ts";
+import { buildSection } from "./plan/handoff.ts";
+import { buildOrder } from "./plan/order.ts";
+import { parsePlanProgress, type SliceProgress } from "./plan/progress.ts";
+import { renderPlan } from "./plan/render.ts";
+import { DEFAULT_PLAN_DIR, displayPath, planFile, readPlan, writePlan } from "./plan/write.ts";
 import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, SECTION } from "./prompt.ts";
 import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
 import { selectReview, type ReviewUi } from "./review.ts";
@@ -7,12 +13,15 @@ import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state
 import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
 import type { ArchitectState, Mode } from "./state/types.ts";
-import { advance, AdvanceParams, type AdvanceDetails } from "./tools/advance.ts";
+import { advance, AdvanceParams, type AdvanceDetails, type Finalized } from "./tools/advance.ts";
+import { planSlices, prepareSliceArgs, SliceParams, type SliceDetails } from "./tools/slice.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
 import type { Paint } from "./ui/paint.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
-import { LineComponent, renderPlanProgress, renderStepper } from "./ui/stepper.ts";
+import { renderBuildProgress, type BuildView } from "./ui/progress.ts";
+import { sliceCall, sliceResult } from "./ui/slice.ts";
+import { LineComponent, renderStepper } from "./ui/stepper.ts";
 import { advanceCall, advanceResult, updateCall, updateResult } from "./ui/tools.ts";
 
 export { ENTRY_TYPE } from "./state/events.ts";
@@ -21,6 +30,8 @@ export const KICKOFF_MESSAGE = "architect-kickoff";
 /** Toggles the mode. Pi does not bind it by default. */
 export const SHORTCUT = "ctrl+alt+a";
 export const FLAG = "architect";
+/** `--architect-plan-dir <dir>`: where plan files go, relative to the cwd. */
+export const PLAN_DIR_FLAG = "architect-plan-dir";
 
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
@@ -32,6 +43,12 @@ export interface ArchitectOverrides {
 	/** Replaces the phase review screen. */
 	review?: ReviewUi;
 	now?: () => number;
+	/** Where plan files go, relative to the cwd or absolute. Beats the flag. Default `docs/plans`. */
+	planDir?: string;
+	/** Copies text to the clipboard, for `/plan copy`. */
+	copy?: (text: string) => Promise<void>;
+	/** Opens a file in the default app, for `/plan open`. */
+	open?: (file: string) => Promise<void>;
 }
 
 const textOf = (result: { content: { type: string; text?: string }[] }) =>
@@ -46,6 +63,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	let widget: "stepper" | "plan" | undefined;
 	/** Tools architect mode turned off, to turn back on in build mode. In memory: Pi starts with its defaults again. */
 	const turnedOff = new Set<string>();
+	/** Slices of the plan file as last read. The file is the source of truth, so this is only a cache. */
+	let progress: SliceProgress[] | undefined;
 
 	const has = (name: string) => pi.getAllTools().some((t) => t.name === name);
 
@@ -72,11 +91,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		const theme = ctx.ui.theme as Paint;
 		ctx.ui.setStatus(STATUS_KEY, modeStatus(state, theme));
 		const arch = state.architecture;
-		const wanted = state.mode === "architect" && arch ? "stepper" : arch && isApproved(arch) ? "plan" : undefined;
+		const wanted = state.mode === "architect" && arch ? "stepper" : state.plan || isApproved(arch) ? "plan" : undefined;
 		const draw = (width: number, paint: Paint) => {
 			const a = state.architecture;
-			if (!a) return undefined;
-			return widget === "stepper" ? renderStepper(a, width, paint) : renderPlanProgress(a, width, paint);
+			if (widget === "stepper") return a ? renderStepper(a, width, paint) : undefined;
+			const view = buildView();
+			return view ? renderBuildProgress(view, width, paint) : undefined;
 		};
 		if (!wanted) {
 			if (widget) ctx.ui.setWidget(WIDGET_KEY, undefined);
@@ -114,8 +134,60 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	function load(ctx: ExtensionContext): void {
 		ctxRef = ctx;
 		state = rebuild(ctx.sessionManager.getBranch());
+		progress = undefined;
 		applyTools();
 		refresh();
+	}
+
+	/** The build widget's content: the plan file's slices, or the architecture's while the file is missing. */
+	function buildView(): BuildView | undefined {
+		const arch = state.architecture;
+		const plan = state.plan;
+		const name = plan?.slug || arch?.slug || "plan";
+		if (plan && progress) return { name, slices: progress };
+		if (!plan && !isApproved(arch)) return undefined;
+		const slices = buildOrder(arch?.slices ?? []).map((o) => ({
+			number: o.number,
+			title: o.slice.title,
+			total: o.slice.steps.length + 1,
+			checked: 0,
+		}));
+		return { name, slices, problem: plan ? "plan file not found · /plan" : "plan not written · /plan write" };
+	}
+
+	/** Re-read the plan file and redraw when its boxes changed. */
+	async function syncProgress(ctx: ExtensionContext): Promise<SliceProgress[] | undefined> {
+		const plan = state.plan;
+		if (!plan) return undefined;
+		const text = await readPlan(planFile(ctx.cwd, plan.path));
+		const next = text === undefined ? undefined : parsePlanProgress(text);
+		if (JSON.stringify(next) !== JSON.stringify(progress)) {
+			progress = next;
+			refresh();
+		}
+		return progress;
+	}
+
+	function planDir(): string {
+		const flag = pi.getFlag(PLAN_DIR_FLAG);
+		return overrides.planDir ?? (typeof flag === "string" && flag.trim() ? flag.trim() : DEFAULT_PLAN_DIR);
+	}
+
+	/** Write the approved plan to a new file and record where. Never overwrites a file. */
+	async function writePlanFile(ctx: ExtensionContext): Promise<Finalized> {
+		const arch = state.architecture;
+		if (!arch || !isApproved(arch)) return { error: "the plan is not approved" };
+		try {
+			const content = renderPlan(arch, { session: ctx.sessionManager.getSessionId() });
+			const slug = arch.slug || slugify(arch.feature);
+			const file = await writePlan(planFile(ctx.cwd, planDir()), slug, content);
+			const path = displayPath(ctx.cwd, file);
+			progress = parsePlanProgress(content);
+			append({ type: "plan", path, feature: arch.feature, slug, at: now() });
+			return { path };
+		} catch (error) {
+			return { error: error instanceof Error ? error.message : String(error) };
+		}
 	}
 
 	/** Switch mode after a confirmation where work would be left unapproved. Returns false when the user declined. */
@@ -142,6 +214,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	pi.registerFlag(FLAG, {
 		description: "Start in architect mode: design a feature before building it",
 		type: "boolean",
+	});
+	pi.registerFlag(PLAN_DIR_FLAG, {
+		description: `Where approved plans are written, relative to the working directory (default ${DEFAULT_PLAN_DIR})`,
+		type: "string",
 	});
 
 	pi.registerTool({
@@ -202,7 +278,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		executionMode: "sequential",
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			ctxRef = ctx;
-			return advance({ state: () => state, append, review, now, has }, params, signal, ctx);
+			return advance({ state: () => state, append, review, now, has, finalize: writePlanFile }, params, signal, ctx);
 		},
 		renderCall(args, theme, context) {
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
@@ -220,6 +296,49 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	registerDiagramTool(pi, { state: () => state, append, has });
 
+	pi.registerTool({
+		name: "architect_slice",
+		label: "Architect slice",
+		description:
+			"Define every slice of the plan and return at once with the build order. Each slice has an id, title, goal, " +
+			"depends_on (ids), files, concrete steps and exact verify commands. Replaces the earlier list, so send all " +
+			"slices each time. Fails with every problem when slices are vague, unverifiable or depend in a cycle.",
+		promptSnippet: "Define the buildable slices of the architect plan with their dependencies and verify commands",
+		promptGuidelines: [
+			"Use architect_slice in the Slice phase. A builder with no other context follows each step, so name the file, function or type in every step.",
+		],
+		parameters: SliceParams,
+		defaultActive: false,
+		prepareArguments: prepareSliceArgs,
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			ctxRef = ctx;
+			const arch = state.architecture;
+			if (state.mode !== "architect" || !arch)
+				throw new Error("architect_slice only works in architect mode. The user switches with /mode architect.");
+			const plan = planSlices(arch, params, has);
+			append(plan.event);
+			return { content: [{ type: "text", text: plan.text }], details: plan.details };
+		},
+		renderCall(args, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			text.setText(sliceCall(args, theme as Paint));
+			return text;
+		},
+		renderResult(result, { expanded }, theme, context) {
+			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+			text.setText(
+				sliceResult(
+					result.details as SliceDetails | undefined,
+					textOf(result),
+					expanded,
+					context.isError,
+					theme as Paint,
+				),
+			);
+			return text;
+		},
+	});
+
 	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, _options, theme) => {
 		const e = entry.data;
 		const paint = theme as Paint;
@@ -235,6 +354,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		if (e.type === "begin")
 			return new Text(`${paint.fg("accent", "◆")} ${paint.fg("text", `architecting "${e.feature}"`)}`, 0, 0);
 		if (e.type === "reset") return new Text(paint.fg("dim", "■ architecture discarded"), 0, 0);
+		if (e.type === "plan")
+			return new Text(
+				`${paint.fg("success", "▣ plan")} ${paint.fg("text", e.path)}  ${paint.fg("dim", "/plan to build it")}`,
+				0,
+				0,
+			);
 		return undefined;
 	});
 
@@ -330,6 +455,46 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		},
 	});
 
+	pi.registerCommand("plan", {
+		description: "Show the approved plan and build it: /plan build starts a new session that builds it",
+		getArgumentCompletions: (prefix) => {
+			const items = PLAN_SUBCOMMANDS.filter((i) => i.value.startsWith(prefix.trim())).map((i) => ({
+				value: i.value,
+				label: i.value,
+				description: i.description,
+			}));
+			return items.length ? items : null;
+		},
+		handler: async (args, ctx) => {
+			ctxRef = ctx;
+			await planCommand(args, ctx, {
+				state: () => state,
+				sync: syncProgress,
+				write: writePlanFile,
+				now,
+				buildHere: async (c, message) => {
+					if (state.mode !== "build" && !(await setMode("build", c))) return false;
+					pi.sendUserMessage(message, c.isIdle() ? undefined : { deliverAs: "followUp" });
+					return true;
+				},
+				copy:
+					overrides.copy ?? (async (text) => (await import("@earendil-works/pi-coding-agent")).copyToClipboard(text)),
+				open: async (path) => {
+					const file = planFile(ctx.cwd, path);
+					if (overrides.open) return overrides.open(file);
+					const [cmd, ...args] =
+						process.platform === "darwin"
+							? ["open", file]
+							: process.platform === "win32"
+								? ["cmd", "/c", "start", "", file]
+								: ["xdg-open", file];
+					const result = await pi.exec(cmd!, args);
+					if (result.code !== 0) ctx.ui.notify(`Could not open ${path}. Open it yourself: ${file}`, "error");
+				},
+			});
+		},
+	});
+
 	pi.registerShortcut(SHORTCUT, {
 		description: "Switch between architect and build mode",
 		handler: async (ctx) => {
@@ -339,16 +504,37 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	pi.on("session_start", async (event, ctx) => {
 		load(ctx);
+		await syncProgress(ctx);
 		if (event.reason === "startup" && pi.getFlag(FLAG) === true && state.mode !== "architect")
 			await setMode("architect", ctx);
 	});
 
-	pi.on("session_tree", async (_event, ctx) => load(ctx));
+	pi.on("session_tree", async (_event, ctx) => {
+		load(ctx);
+		await syncProgress(ctx);
+	});
+
+	// Progress lives in the plan file's boxes. Re-read it after a tool that may have ticked one, and after
+	// each run as a catch-all for other ways to edit it.
+	pi.on("tool_result", async (event, ctx) => {
+		const plan = state.plan;
+		if (!plan || event.isError) return;
+		const path = (event.input as { path?: unknown } | undefined)?.path;
+		const touches =
+			event.toolName === "bash" ||
+			(typeof path === "string" && planFile(ctx.cwd, path.replace(/^@/, "")) === planFile(ctx.cwd, plan.path));
+		if (touches) await syncProgress(ctx);
+	});
+
+	pi.on("agent_end", async (_event, ctx) => {
+		await syncProgress(ctx);
+	});
 
 	pi.on("session_shutdown", async () => {
 		ctxRef = undefined;
 		tui = undefined;
 		widget = undefined;
+		progress = undefined;
 	});
 
 	pi.on("tool_call", async (event) => {
@@ -360,7 +546,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	pi.on("before_agent_start", async (event, ctx) => {
 		ctxRef = ctx;
 		const sections = event.systemPromptOptions.sections;
-		const section = architectSection(state, has);
+		const section =
+			architectSection(state, has) ??
+			(state.mode === "build" && state.plan ? buildSection(state.plan, progress) : undefined);
 		if (section) sections[SECTION] = section;
 		else delete sections[SECTION];
 		if (modeToldToModel(ctx.sessionManager.getBranch()) === state.mode) return;

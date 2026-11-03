@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, FLAG, SHORTCUT, WIDGET_KEY } from "../src/index.ts";
@@ -10,6 +11,16 @@ import { assertComponentFits, FakeUi, plainTheme } from "./helpers.ts";
 
 const events = (h: ReturnType<typeof harness>) => h.entries.map((e) => e.data.type);
 
+/** A slice that passes architect_slice's checks. */
+const SLICE = {
+	id: "s1",
+	title: "Store the key",
+	goal: "Events carry a key.",
+	files: ["src/key.ts"],
+	steps: ["Add dedupKey() to src/key.ts"],
+	verify: ["npm test"],
+};
+
 async function architecting(ui = new FakeUi()) {
 	const h = harness({ ui });
 	await h.fire("session_start", { reason: "startup" });
@@ -20,7 +31,7 @@ async function architecting(ui = new FakeUi()) {
 describe("registration", () => {
 	it("registers the architect tools inactive, with prompt text that names each tool", () => {
 		const h = harness();
-		for (const name of ["architect_update", "architect_advance", "architect_diagram"]) {
+		for (const name of ["architect_update", "architect_advance", "architect_diagram", "architect_slice"]) {
 			const tool = h.tools[name]!;
 			assert.equal(tool.defaultActive, false);
 			assert.ok(tool.promptSnippet);
@@ -28,7 +39,7 @@ describe("registration", () => {
 			for (const line of tool.promptGuidelines!) assert.match(line, new RegExp(name));
 		}
 		assert.equal(h.tools.architect_advance!.executionMode, "sequential");
-		assert.deepEqual(Object.keys(h.commands).sort(), ["architect", "mode"]);
+		assert.deepEqual(Object.keys(h.commands).sort(), ["architect", "mode", "plan"]);
 		assert.ok(h.shortcuts[SHORTCUT]);
 		assert.ok(h.flags[FLAG]);
 		assert.ok(!h.active().some((n) => n.startsWith("architect_")));
@@ -217,7 +228,7 @@ describe("persistence", () => {
 		const h = harness({ ui, branch });
 		await h.fire("session_start", { reason: "resume" });
 		assert.equal(ui.statuses.get(STATUS_KEY), "▸ build · plan approved");
-		assert.deepEqual(ui.widgetLines(WIDGET_KEY), [" ▸ BUILD  Dedupe · 0 slices"]);
+		assert.deepEqual(ui.widgetLines(WIDGET_KEY), [" ▸ BUILD  plan: dedupe  plan not written · /plan write"]);
 	});
 });
 
@@ -437,7 +448,9 @@ describe("architect_advance", () => {
 		await h.call("architect_update", { modules: [{ path: "src/ingest", role: "touched" }] });
 		for (let i = 0; i < 2; i++) await h.call("architect_advance", {});
 		await h.call("architect_diagram", { title: "Flow", body: "A ──▶ B" });
-		for (let i = 0; i < 2; i++) await h.call("architect_advance", {});
+		await h.call("architect_advance", {});
+		await h.call("architect_slice", { slices: [SLICE] });
+		await h.call("architect_advance", {});
 		const final = await h.call("architect_advance", {});
 		assert.deepEqual(seen, [
 			"frame:review",
@@ -452,6 +465,8 @@ describe("architect_advance", () => {
 			final.content[0]!.text,
 			/The user approved the Blueprint\. The plan is final\. The user added: "ship it"/,
 		);
+		assert.equal(final.details?.planPath, join("docs", "plans", "dedupe.md"));
+		assert.match(final.content[0]!.text, /It is saved at docs\/plans\/dedupe\.md\./);
 		assert.equal(h.ui!.statuses.get(STATUS_KEY), "◆ architect · plan approved");
 		await assert.rejects(h.call("architect_advance", {}), /already approved/);
 	});

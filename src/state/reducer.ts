@@ -122,9 +122,17 @@ export function reduce(state: ArchitectState, event: ArchitectEvent): ArchitectS
 				return { mode: "architect", architecture: newArchitecture(event.at) };
 			return { ...state, mode: event.mode };
 		case "begin":
-			return { ...state, architecture: newArchitecture(event.at, event.feature, event.slug) };
+			return { mode: state.mode, architecture: newArchitecture(event.at, event.feature, event.slug) };
 		case "reset":
-			return state.mode === "architect" ? { ...state, architecture: newArchitecture(event.at) } : { mode: state.mode };
+			return state.mode === "architect"
+				? { mode: state.mode, architecture: newArchitecture(event.at) }
+				: { mode: state.mode };
+		case "plan": {
+			const path = typeof event.path === "string" ? event.path.trim() : "";
+			if (!path || typeof event.slug !== "string" || typeof event.at !== "number") return state;
+			const feature = typeof event.feature === "string" ? event.feature : "";
+			return { ...state, plan: { path, feature, slug: event.slug, at: event.at } };
+		}
 		default: {
 			const arch = state.architecture;
 			if (!arch || arch.approvedAt !== undefined) return state;

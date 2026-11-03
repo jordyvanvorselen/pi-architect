@@ -63,7 +63,12 @@ export function advanceResult(
 	const comment = details.comment ? paint.fg("muted", `  "${details.comment}"`) : "";
 	switch (details.outcome) {
 		case "approved":
-			if (details.final) return paint.fg("success", `✓ ${label} approved · the plan is final`) + comment;
+			if (details.final)
+				return (
+					paint.fg("success", `✓ ${label} approved · the plan is final`) +
+					(details.planPath ? paint.fg("dim", ` · ${details.planPath}`) : "") +
+					comment
+				);
 			return paint.fg("success", `✓ ${label} approved`) + paint.fg("dim", ` → ${PHASE_LABEL[details.next!]}`) + comment;
 		case "changes":
 			return paint.fg("warning", `↻ changes requested for ${label}`) + comment;
