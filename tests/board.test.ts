@@ -468,9 +468,9 @@ describe("board comments", () => {
 		assert.match(text, /✎ 1 to send/);
 		assert.match(text, /Decisions 2 ✎1/);
 		assert.match(text, /╰─ ✎ q2 ─/);
-		assert.match(text, /c edit comment {2}x remove {2}m next comment {2}esc close · sends 1/);
+		assert.match(text, /c edit comment {2}x remove {2}m next comment {2}esc close · 1 to send/);
 		b.press("6", "c", ...type("Split it"), KEYS.enter, "1", "c", ...type("Tighter"), KEYS.enter);
-		b.press(KEYS.escape);
+		b.press(KEYS.escape, KEYS.enter);
 		assert.deepEqual(
 			b.closed()!.map((c) => [c.tab, c.ref, c.label, c.text]),
 			[
@@ -481,6 +481,54 @@ describe("board comments", () => {
 		);
 		b.press(KEYS.escape);
 		assert.equal(b.closed()!.length, 3, "closes once");
+	});
+
+	it("asks before closing with comments: ↵ sends them, d discards them, esc keeps editing", () => {
+		const b = board(architect(), { tab: "risks" });
+		b.press("c", ...type("watch this"), KEYS.enter, "q");
+		assert.equal(b.screen.state.confirming, true);
+		assert.equal(b.closed(), undefined);
+		let text = b.lines().join("\n");
+		assert.match(text, /│ +Send 1 comment to the agent\? {2}↵ send {2}d discard {2}esc keep editing +│/);
+		assert.doesNotMatch(text, /1-7 tabs/);
+		b.press("c", "x", "m", KEYS.down, "q");
+		assert.deepEqual(
+			[b.screen.state.editing, b.screen.state.selected, b.screen.state.comments.length],
+			[undefined, "risk:r1", 1],
+			"other keys do nothing",
+		);
+		b.screen.handleMouse(click(5, 1));
+		assert.equal(b.screen.state.confirming, true, "clicks do nothing");
+		b.press(KEYS.escape);
+		assert.equal(b.screen.state.confirming, false);
+		assert.equal(b.closed(), undefined);
+		text = b.lines().join("\n");
+		assert.match(text, /esc close · 1 to send/);
+		b.press(KEYS.down, "c", ...type("and this"), KEYS.enter, KEYS.escape);
+		assert.match(b.lines().join("\n"), /Send 2 comments to the agent\?/);
+		b.press("d");
+		assert.deepEqual(b.closed(), [], "d discards");
+		b.press(KEYS.enter);
+		assert.deepEqual(b.closed(), [], "closes once");
+
+		const sent = board(architect(), { tab: "risks" });
+		sent.press("c", "y", KEYS.enter, KEYS.escape, KEYS.enter);
+		assert.deepEqual(
+			sent.closed()!.map((c) => c.text),
+			["y"],
+		);
+	});
+
+	it("shortens the send question on narrow boards", () => {
+		const at = (columns: number) => {
+			const b = board(architect(), { tab: "risks", columns });
+			b.press("c", "y", KEYS.enter, KEYS.down, "c", "z", KEYS.enter, "q");
+			return b.lines().join("\n");
+		};
+		assert.match(at(100), /Send 2 comments to the agent\? {2}↵ send {2}d discard {2}esc keep editing/);
+		assert.match(at(50), /Send 2 comments\? {2}↵ send {2}d discard {2}esc back/);
+		assert.match(at(40), /│ Send 2\? {2}↵ send {2}d discard {2}esc back +│/);
+		assert.match(at(30), /│ Send 2\? {2}↵ {2}d {2}esc +│/);
 	});
 
 	it("edits a comment, removes it with x or by saving it empty, and cancels with esc", () => {
@@ -526,7 +574,7 @@ describe("board comments", () => {
 		b.press(KEYS.enter, "c", ...type("add the queue"), KEYS.enter);
 		assert.match(b.lines().join("\n"), /✎ add the queue/);
 		assert.equal(b.screen.state.detail, "diagram:g1");
-		b.press(KEYS.escape, KEYS.escape);
+		b.press(KEYS.escape, KEYS.escape, KEYS.enter);
 		assert.deepEqual(
 			b.closed()!.map((c) => c.ref),
 			["g1"],
@@ -623,7 +671,7 @@ describe("board mouse", () => {
 		b.press("c");
 		b.screen.handleMouse(click(find(b.lines(), "Risks").x, find(b.lines(), "Risks").y));
 		assert.equal(b.screen.state.tab, "explore");
-		b.press(KEYS.escape, KEYS.escape);
+		b.press(KEYS.escape, KEYS.escape, "d");
 		assert.equal(b.screen.handleMouse(click(1, 1)), undefined, "closed");
 		b.screen.handleInput("1");
 		assert.equal(b.screen.state.tab, "explore");
@@ -730,7 +778,7 @@ describe("openBoard", () => {
 
 	it("sends the comments at once when the agent is idle, and steers them in when it is busy", async () => {
 		for (const idle of [true, false]) {
-			const ui = new FakeUi().keys(["c", ...type("Tighter"), KEYS.enter, KEYS.escape]);
+			const ui = new FakeUi().keys(["c", ...type("Tighter"), KEYS.enter, KEYS.escape, KEYS.enter]);
 			const sent: { text: string; options: unknown }[] = [];
 			const opened: unknown[] = [];
 			const comments = await openBoard(ctx(ui, idle), {
@@ -761,7 +809,7 @@ describe("openBoard", () => {
 		const sent: string[] = [];
 		assert.deepEqual(await openBoard(ctx(ui), { data: () => architect(), send: (t) => sent.push(t) }), []);
 		assert.equal(sent.length, 0);
-		const two = new FakeUi().keys(["1", "c", "a", KEYS.enter, KEYS.down, "c", "b", KEYS.enter, "q"]);
+		const two = new FakeUi().keys(["1", "c", "a", KEYS.enter, KEYS.down, "c", "b", KEYS.enter, "q", KEYS.enter]);
 		await openBoard(ctx(two), { data: () => architect(), send: (t) => sent.push(t) });
 		assert.equal(two.notifications.at(-1)!.message, "Sent 2 board comments to the agent.");
 	});
@@ -776,7 +824,7 @@ describe("/architect board and ctrl+alt+b", () => {
 	];
 
 	it("opens the board as an overlay, completes, and sends the comments as a user message", async () => {
-		const ui = new FakeUi().keys(["c", ...type("Say per incident"), KEYS.enter, KEYS.escape]);
+		const ui = new FakeUi().keys(["c", ...type("Say per incident"), KEYS.enter, KEYS.escape, KEYS.enter]);
 		const h = harness({ ui, branch: started() });
 		await h.fire("session_start", { reason: "resume" });
 		assert.deepEqual(
@@ -793,7 +841,7 @@ describe("/architect board and ctrl+alt+b", () => {
 	});
 
 	it("steers the comments in when the agent is busy", async () => {
-		const ui = new FakeUi().keys(["c", "x", KEYS.enter, "q"]);
+		const ui = new FakeUi().keys(["c", "x", KEYS.enter, "q", KEYS.enter]);
 		const h = harness({ ui, branch: started() });
 		await h.fire("session_start", { reason: "resume" });
 		h.ctx.isIdle = () => false;

@@ -18,6 +18,7 @@ import {
 	boxRow,
 	clipLine,
 	edge,
+	hints,
 	innerWidth,
 	lineWidth,
 	paintLine,
@@ -95,8 +96,9 @@ const DIAGRAM_KEYS = new Set(["h", "l", "0", "$"]);
  *   PgUp/PgDn, Home/End and the wheel scroll.
  * - ↵ opens the selected item: a decision shows its options as cards, a slice its steps, a diagram opens
  *   in a detail view where ←/→ scroll it sideways. `e` opens or closes every item on the tab.
- * - `c` writes a comment on the selected item, `x` removes it, `m` jumps to the next one. Closing the board
- *   with esc or q hands the comments to `done`. In build mode the board is read-only.
+ * - `c` writes a comment on the selected item, `x` removes it, `m` jumps to the next one. esc or q closes
+ *   the board. With comments it first asks in the bottom bar: ↵ hands them to `done`, `d` discards them
+ *   and esc goes back to the board. In build mode the board is read-only.
  */
 export class BoardScreen implements Component, Focusable {
 	readonly capturesViewportInput = true;
@@ -121,6 +123,8 @@ export class BoardScreen implements Component, Focusable {
 	private width = 80;
 	private hasFocus = false;
 	private closed = false;
+	/** Closing with comments: the bottom bar asks whether to send them. */
+	private confirming = false;
 
 	constructor(tui: TUI, paint: Paint, options: BoardOptions) {
 		this.tui = tui;
@@ -149,6 +153,7 @@ export class BoardScreen implements Component, Focusable {
 		detailScroll: number | undefined;
 		editing: string | undefined;
 		comments: BoardComment[];
+		confirming: boolean;
 	} {
 		return {
 			tab: this.tab,
@@ -159,6 +164,7 @@ export class BoardScreen implements Component, Focusable {
 			detailScroll: this.detail?.view.scroll,
 			editing: this.editor?.item.key,
 			comments: [...this.comments.values()],
+			confirming: this.confirming,
 		};
 	}
 
@@ -206,10 +212,20 @@ export class BoardScreen implements Component, Focusable {
 		this.tui.requestRender();
 	}
 
+	/** esc or q: close at once, or ask first when there are comments to send. */
 	private close(): void {
 		if (this.closed) return;
+		if (!this.readOnly && this.comments.size) {
+			this.confirming = true;
+			this.changed();
+		} else this.finish([]);
+	}
+
+	private finish(comments: BoardComment[]): void {
+		if (this.closed) return;
 		this.closed = true;
-		this.options.done(this.readOnly ? [] : [...this.comments.values()]);
+		this.confirming = false;
+		this.options.done(comments);
 	}
 
 	// ── Content ──────────────────────────────────────────────────────────────────────────────────
@@ -333,7 +349,54 @@ export class BoardScreen implements Component, Focusable {
 		return { lines, owners, ranges };
 	}
 
+	/** `Send 2 comments to the agent?  ↵ send  d discard  esc keep editing`, shorter where that does not fit. */
+	private confirmLine(inner: number): Line {
+		const n = this.comments.size;
+		const comments = n === 1 ? "1 comment" : `${n} comments`;
+		const options: [string, HintPair[]][] = [
+			[
+				`Send ${comments} to the agent?`,
+				[
+					["↵", "send"],
+					["d", "discard"],
+					["esc", "keep editing"],
+				],
+			],
+			[
+				`Send ${comments}?`,
+				[
+					["↵", "send"],
+					["d", "discard"],
+					["esc", "back"],
+				],
+			],
+			[
+				`Send ${n}?`,
+				[
+					["↵", "send"],
+					["d", "discard"],
+					["esc", "back"],
+				],
+			],
+			[
+				`Send ${n}?`,
+				[
+					["↵", ""],
+					["d", ""],
+					["esc", ""],
+				],
+			],
+		];
+		let line: Line = [];
+		for (const [question, pairs] of options) {
+			line = [sp(question, "warning", true), sp("  "), ...hints(pairs)];
+			if (lineWidth(line) <= inner) return line;
+		}
+		return clipLine(line, inner);
+	}
+
 	private hints(inner: number, max: number): Line[] {
+		if (this.confirming) return [this.confirmLine(inner)];
 		if (this.editor)
 			return hintRows(
 				[
@@ -351,7 +414,7 @@ export class BoardScreen implements Component, Focusable {
 				max,
 			);
 		const count = this.comments.size;
-		const close: HintPair = ["esc", count && !this.readOnly ? `close · sends ${count}` : "close"];
+		const close: HintPair = ["esc", count && !this.readOnly ? `close · ${count} to send` : "close"];
 		const write = !this.readOnly && this.selectedItem() !== undefined;
 		const hasComment = this.comments.has(this.selectedItem()?.key ?? "");
 		if (this.detail)
@@ -383,19 +446,18 @@ export class BoardScreen implements Component, Focusable {
 			...(count && !this.readOnly ? ([["m", "next comment"]] as const) : []),
 			close,
 		];
-		const send = count && !this.readOnly ? `send ${count}` : "close";
 		const brief: HintPair[] = [
 			["1-7", ""],
 			["↑↓", ""],
 			...open.map(([k]) => [k, ""] as const),
 			...(write ? ([["c", "comment"]] as const) : []),
-			["esc", send],
+			["esc", "close"],
 		];
 		const tiny: HintPair[] = [
 			["↑↓", ""],
 			...open.map(([k]) => [k, ""] as const),
 			...(write ? ([["c", ""]] as const) : []),
-			["esc", count && !this.readOnly ? send : ""],
+			["esc", ""],
 		];
 		return hintRows([long, brief, tiny], inner, max);
 	}
@@ -681,6 +743,15 @@ export class BoardScreen implements Component, Focusable {
 
 	handleInput(data: string): void {
 		if (this.closed) return;
+		if (this.confirming) {
+			if (matchesKey(data, Key.enter)) this.finish([...this.comments.values()]);
+			else if (data === "d") this.finish([]);
+			else if (matchesKey(data, Key.escape)) {
+				this.confirming = false;
+				this.changed();
+			}
+			return;
+		}
 		const editor = this.editor;
 		if (editor) {
 			if (matchesKey(data, Key.escape)) {
@@ -742,7 +813,8 @@ export class BoardScreen implements Component, Focusable {
 			} else this.scrollBy(Math.sign(delta) * Math.max(WHEEL_LINES, Math.abs(delta)));
 			return { handled: true };
 		}
-		if (event.type !== "click" || event.button !== "left" || this.editor) return { handled: true, render: false };
+		if (event.type !== "click" || event.button !== "left" || this.editor || this.confirming)
+			return { handled: true, render: false };
 		const { x, y } = event;
 		if (y === frame.tabRow) {
 			const hit = frame.tabRanges.find((r) => x >= frame.tabOffset + r.start && x < frame.tabOffset + r.end);

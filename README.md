@@ -58,7 +58,7 @@ On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests cha
 
 The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
 Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.
-When you close the board, your comments go to the agent as one message, with the decision, diagram or slice each one is about.
+When you close the board with comments, it asks whether to send them. ↵ sends them to the agent as one message, with the decision, diagram or slice each one is about. `d` discards them and esc goes back to the board.
 In build mode the board is read-only, for reading the approved design.
 
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
