@@ -19,6 +19,7 @@ import { planSlices, prepareSliceArgs, SliceParams, type SliceDetails } from "./
 import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
+import { BOARD_HINT, BOARD_SHORTCUT, openBoard, type BoardScreen } from "./ui/board/index.ts";
 import { createDecisionCard } from "./ui/decision/index.ts";
 import { choiceEntry, SpanView, verdictEntry } from "./ui/entries.ts";
 import type { Paint } from "./ui/paint.ts";
@@ -77,6 +78,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	/** Slices of the plan file as last read. The file is the source of truth, so this is only a cache. */
 	let progress: SliceProgress[] | undefined;
 
+	/** The open board, so it redraws when the architecture changes. */
+	let board: BoardScreen | undefined;
+
 	const has = (name: string) => pi.getAllTools().some((t) => t.name === name);
 
 	function applyTools(): void {
@@ -100,14 +104,17 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		const ctx = ctxRef;
 		if (!ctx?.hasUI) return;
 		const theme = ctx.ui.theme as Paint;
+		board?.update();
 		ctx.ui.setStatus(STATUS_KEY, modeStatus(state, theme));
+		// The board shortcut only works in Pi's terminal UI.
+		const hint = ctx.mode === "tui" ? BOARD_HINT : undefined;
 		const arch = state.architecture;
 		const wanted = state.mode === "architect" && arch ? "stepper" : state.plan || isApproved(arch) ? "plan" : undefined;
 		const draw = (width: number, paint: Paint) => {
 			const a = state.architecture;
-			if (widget === "stepper") return a ? renderStepper(a, width, paint) : undefined;
+			if (widget === "stepper") return a ? renderStepper(a, width, paint, hint) : undefined;
 			const view = buildView();
-			return view ? renderBuildProgress(view, width, paint) : undefined;
+			return view ? renderBuildProgress(view, width, paint, hint) : undefined;
 		};
 		if (!wanted) {
 			if (widget) ctx.ui.setWidget(WIDGET_KEY, undefined);
@@ -229,6 +236,30 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	}
 
 	const toggle = (ctx: ExtensionContext) => setMode(state.mode === "architect" ? "build" : "architect", ctx);
+
+	/** The whole architecture on one overlay. Comments the user writes there go to the agent on close. */
+	async function showBoard(ctx: ExtensionContext): Promise<void> {
+		ctxRef = ctx;
+		if (board) return;
+		await syncProgress(ctx);
+		const plan = state.plan;
+		const planText = plan ? await readPlan(planFile(ctx.cwd, plan.path)) : undefined;
+		const target = planTarget(ctx);
+		const session = ctx.sessionManager.getSessionId();
+		await openBoard(ctx, {
+			data: () => ({
+				mode: state.mode,
+				...(state.architecture ? { arch: state.architecture } : {}),
+				...(state.plan ? { plan: state.plan } : {}),
+				...(planText !== undefined && state.plan === plan ? { planText } : {}),
+				...(target ? { planTarget: target } : {}),
+				...(progress ? { progress } : {}),
+				session,
+			}),
+			send: (text, options) => pi.sendUserMessage(text, options),
+			onOpen: (open) => (board = open),
+		});
+	}
 
 	pi.registerFlag(FLAG, {
 		description: "Start in architect mode: design a feature before building it",
@@ -425,10 +456,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	const architectItems: AutocompleteItem[] = [
 		{ value: "reset", label: "reset", description: "Discard the architecture in this session" },
+		{ value: "board", label: "board", description: "See the whole architecture on one screen and comment on it" },
 	];
 
 	pi.registerCommand("architect", {
-		description: "Architect a feature: /architect <feature> starts, /architect reset discards",
+		description:
+			"Architect a feature: /architect <feature> starts, /architect board shows it, /architect reset discards",
 		getArgumentCompletions: (prefix) => {
 			const items = architectItems.filter((i) => i.value.startsWith(prefix.trim()));
 			return items.length ? items : null;
@@ -436,6 +469,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		handler: async (args, ctx) => {
 			ctxRef = ctx;
 			const feature = args.trim();
+			if (feature === "board") {
+				await showBoard(ctx);
+				return;
+			}
 			if (feature === "reset") {
 				const arch = state.architecture;
 				if (!arch || (isPristine(arch) && !arch.feature)) {
@@ -529,6 +566,13 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		description: "Switch between architect and build mode",
 		handler: async (ctx) => {
 			await toggle(ctx);
+		},
+	});
+
+	pi.registerShortcut(BOARD_SHORTCUT, {
+		description: "Open the architecture board",
+		handler: async (ctx) => {
+			await showBoard(ctx);
 		},
 	});
 

@@ -19,7 +19,7 @@ const ARROW: Style = { color: "borderAccent" };
 const FRAME: DiagramColor = "borderMuted";
 
 export interface RenderOptions {
-	/** Where to see the whole diagram, for the hint under a cut-off one. Default `"/board"`. */
+	/** Where to see the whole diagram, for the hint under a cut-off one. Default `"/architect board"`. */
 	fullView?: string;
 }
 
@@ -208,7 +208,7 @@ function bare(
 	const key = legend(p.statuses, theme);
 	if (key.width && key.width <= width) out.push(key.text);
 	if (cut) {
-		const full = options.fullView ?? "/board";
+		const full = options.fullView ?? "/architect board";
 		const hints = [
 			`diagram is ${bodyWidth} cols wide, widen the terminal or open ${full}`,
 			`${bodyWidth} cols wide · open ${full} to see it all`,
