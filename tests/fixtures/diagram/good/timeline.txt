@@ -1,0 +1,4 @@
+ now        week 1        week 2        week 3
+──●────────────●─────────────●─────────────●──▶
+  │            │             │             │
+  spike        schema        processor     rollout
