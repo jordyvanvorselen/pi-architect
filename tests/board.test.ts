@@ -487,6 +487,12 @@ describe("board comments", () => {
 		const b = board(architect(), { tab: "risks" });
 		b.press("c", ...type("watch this"), KEYS.escape);
 		assert.equal(b.screen.state.comments.length, 0, "esc cancels");
+		assert.equal(b.screen.focused, true);
+		b.press("c");
+		b.screen.focused = false;
+		assert.equal(b.screen.focused, false);
+		b.screen.focused = true;
+		b.press(KEYS.escape);
 		b.press("c", ...type("watch this"), KEYS.enter);
 		b.press("c");
 		assert.match(b.lines().join("\n"), /↵ save · empty removes/);
