@@ -185,12 +185,26 @@ describe("phase review screens", () => {
 		assert.match(t, /"only alarms"/);
 		assert.match(t, /A In processor ★ · C Redis stream/);
 		assert.match(t, /✓ A {2}1 minute ★/);
-		assert.match(t, /✓ B {2}A gateway team/);
+		assert.match(t, /✓ B {2}A gateway team {2}your own option/);
 		assert.match(t, /the gateway team owns dedupe/);
 		assert.match(t, /q4 {2}Log drops\?\s+│\n│\s+○ open/);
 		assert.match(text("decide", 80, newArchitecture(1)), /No open questions/);
 		const done = { ...ARCH, decisions: ARCH.decisions.slice(0, 2) };
 		assert.match(text("decide", 80, done), /DECISIONS +2 decided +│/);
+	});
+
+	it("Decide and Blueprint show an option the user wrote as their own, never with placeholder ratings", () => {
+		for (const phase of ["decide", "blueprint"] as const) {
+			const t = text(phase);
+			assert.match(t, /A gateway team {2}your own option/);
+			assert.doesNotMatch(t, /effort|risk [▰\d]|3\/5/);
+		}
+		const narrow = text("decide", 30);
+		assert.match(
+			narrow,
+			/A gateway team\s+│\n│\s+your own option/,
+			"the tag moves below a title it does not fit beside",
+		);
 	});
 
 	it("Design shows the design diagrams through the diagram renderer", () => {

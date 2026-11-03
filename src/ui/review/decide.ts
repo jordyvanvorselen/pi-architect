@@ -1,5 +1,5 @@
 import type { Decision } from "../../state/types.ts";
-import { sp, wrap, wrapAfter, type Line } from "../spans.ts";
+import { lineWidth, sp, wrap, wrapAfter, type Line } from "../spans.ts";
 import { risks, section, trim, type ReviewBody } from "./common.ts";
 
 /** One decision: the question, the chosen option with the comment, and the rejected options dimmed. */
@@ -16,15 +16,21 @@ export function decisionLines(decision: Decision, width: number): Line[] {
 		return lines;
 	}
 	const star = chosen.id === decision.recommendation ? [sp(" ★", "warning")] : [];
-	lines.push(
-		...wrapAfter(
-			[sp(indent), sp("✓ ", "success"), sp(chosen.id, "accent", true), sp("  ")],
-			chosen.title,
-			width,
-			"text",
-			true,
-		).map((l, i) => (i === 0 ? [...l, ...star] : l)),
-	);
+	const title = wrapAfter(
+		[sp(indent), sp("✓ ", "success"), sp(chosen.id, "accent", true), sp("  ")],
+		chosen.title,
+		width,
+		"text",
+		true,
+	).map((l, i) => (i === 0 ? [...l, ...star] : l));
+	// The agent never rated an option the user wrote. Say whose it is, beside the title when it fits.
+	if (chosen.byUser) {
+		const own = sp("your own option", "dim");
+		const last = title.at(-1)!;
+		if (lineWidth(last) + 2 + lineWidth([own]) <= width) last.push(sp("  "), own);
+		else title.push([sp(`${indent}  `), own]);
+	}
+	lines.push(...title);
 	if (chosen.byUser && chosen.summary) lines.push(...wrapAfter([sp(`${indent}  `)], chosen.summary, width, "muted"));
 	if (decision.comment) lines.push(...wrapAfter([sp(`${indent}  `)], `"${decision.comment}"`, width, "muted"));
 	const rejected = decision.options.filter((o) => o !== chosen);

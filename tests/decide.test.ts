@@ -4,7 +4,7 @@ import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { decisionLines, optionLabels, selectDecision, type DecisionUi } from "../src/decision.ts";
 import { ENTRY_TYPE, event, type EventInput } from "../src/state/events.ts";
 import { rebuild } from "../src/state/reducer.ts";
-import type { Decision } from "../src/state/types.ts";
+import type { Decision, DecisionOption } from "../src/state/types.ts";
 import { ownOption, planDecision, prepareDecideArgs, type DecideInput } from "../src/tools/decide.ts";
 import { decideCall, decideResult } from "../src/ui/decision/rows.ts";
 import { harness, type BranchEntry } from "./harness.ts";
@@ -358,6 +358,13 @@ describe("the simple decision dialog", () => {
 		const { reason: _reason, ...plain } = decision;
 		assert.equal(decisionLines(plain).at(-1), "★ Agent recommends A");
 		assert.deepEqual(optionLabels(decision), ["A  Here ★", "B  There"]);
+	});
+
+	it("shows an option the user wrote as their own, without placeholder ratings", () => {
+		const own: DecisionOption = { id: "C", title: "Mine", pros: [], cons: [], effort: 3, risk: 3, byUser: true };
+		const lines = decisionLines({ ...decision, options: [...decision.options, own] });
+		assert.ok(lines.includes("C  Mine · your own option"));
+		assert.ok(!lines.some((l) => l.startsWith("C ") && /effort|risk/.test(l)));
 	});
 
 	it("chooses, proposes an own option, asks, or closes", async () => {
