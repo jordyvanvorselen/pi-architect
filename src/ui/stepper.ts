@@ -83,6 +83,7 @@ export function renderStepper(arch: Architecture, total: number, paint: Paint): 
 	const current = PHASE_LABEL[arch.phase];
 	const position = paintSeg(paint, "dim", `${phaseIndex(arch.phase) + 1}/${PHASES.length}`);
 	const candidates = [
+		...(feature && width(right) === 0 ? [line(brand, gap, feature, gap, full)] : []),
 		line(brand, gap, full),
 		line(brand, gap, short),
 		line(brand, gap, glyph),
