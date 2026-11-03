@@ -24,6 +24,13 @@ const VIEW: BuildView = {
 const at = (width: number, view: BuildView = VIEW) => renderBuildProgress(view, width, plainTheme);
 
 describe("build progress widget", () => {
+	it("adds a key hint at the right edge while the whole line fits with it", () => {
+		const hint = "ctrl+alt+b board";
+		assert.match(renderBuildProgress(VIEW, 120, plainTheme, hint), /Store dedup key {3,}ctrl\+alt\+b board$/);
+		assert.equal(renderBuildProgress(VIEW, 80, plainTheme, hint), at(80));
+		assertFits((width, theme) => [renderBuildProgress(VIEW, width, theme, hint)], [30, 60, 90, 120]);
+	});
+
 	it("shows the plan, every slice and the current one at widths 30, 40, 80 and 120", () => {
 		const lines = assertFits((width, theme) => [renderBuildProgress(VIEW, width, theme)]);
 		assert.deepEqual(Object.fromEntries(lines), {

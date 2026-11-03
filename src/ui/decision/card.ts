@@ -174,6 +174,12 @@ function listRows(view: DecisionView, inner: number): Line[] {
 	return lines;
 }
 
+/** The option cards alone, in the widest layout that fits `inner` columns. The board shows them under a decision. */
+export function optionCards(view: DecisionView, inner: number): Line[] {
+	const layout = chooseLayout(view.decision.options.length, inner);
+	return layout.kind === "list" ? listRows(view, inner) : cardRows(view, inner, layout.columns);
+}
+
 const EDIT_LABEL: Record<Exclude<DecisionMode, "browse">, string> = {
 	comment: "Your comment",
 	own: "Your own option",
