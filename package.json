@@ -1,0 +1,62 @@
+{
+  "name": "@jordyvanvorselen/pi-architect",
+  "version": "0.1.0",
+  "description": "Architect a feature with Pi before you build it. The agent walks through visual phases, you approve each one, and the result is a plan file another agent can build from.",
+  "type": "module",
+  "license": "MIT",
+  "author": "Jordy van Vorselen",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jordyvanvorselen/pi-architect.git"
+  },
+  "homepage": "https://github.com/jordyvanvorselen/pi-architect#readme",
+  "files": [
+    "src/**/*.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi",
+    "coding-agent",
+    "architecture",
+    "planning",
+    "plan-mode",
+    "extension"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.ts",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test",
+    "lint": "eslint . && npm run format",
+    "lint:fix": "eslint . --fix && npm run format:fix",
+    "format": "prettier --check .",
+    "format:fix": "prettier --write . --log-level warn"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^1.5.0",
+    "@earendil-works/pi-tui": "^1.5.0",
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.19.2",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "semver": "^7.8.5",
+    "typebox": "^1.4.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.72.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
