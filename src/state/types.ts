@@ -88,6 +88,8 @@ export interface Diagram {
 export interface Slice {
 	id: string;
 	title: string;
+	/** What is true once the slice is built, in one sentence. */
+	goal?: string;
 	/** Ids of slices that must be built first. */
 	dependsOn: string[];
 	files: string[];
