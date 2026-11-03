@@ -75,7 +75,16 @@ In architect mode a widget above the editor shows the phases and what is still o
 Approved phases are green, the current one is in the accent colour and the pending ones are dim.
 A phase in review is yellow. On narrow terminals the line drops the feature name, then the counters, then shortens the phase names.
 
-In build mode with an approved plan, the widget shows slice progress instead.
+In build mode with an approved plan, the widget shows slice progress instead:
+
+```
+ ▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   slice 3/4 · Store dedup key
+```
+
+Progress lives in the plan file. The builder ticks a box for each step and one for "Verified" per slice.
+The extension reads the file again after an edit or write of that file, after bash and after each run.
+This needs no extra tool, works in any session and in any tool that edits markdown.
+On narrow terminals the line cuts the title, then drops the plan name, the title and the numbers.
 
 ## The decision card
 
@@ -132,6 +141,10 @@ The tools are only active in architect mode, so build mode does not pay for them
 - `/architect <feature>` switches to architect mode and starts on a feature.
 - `/architect reset` discards the architecture.
 - `/board` opens the fullscreen overview.
+- `/plan` shows the plan path and progress and offers the actions below.
+- `/plan build` starts a new session that builds the plan. The new session knows the plan, so it shows the progress.
+- `/plan here` switches to build mode and asks the agent to build the plan.
+- `/plan copy`, `/plan open` and `/plan write` copy the path, open the file and write a missing file again.
 
 ## Read-only in architect mode
 
@@ -184,6 +197,15 @@ Each diagram body in a fenced code block, with its title and caption.
 - steps: concrete changes
 - verify: exact commands or tests that prove the slice is done
 ```
+
+The real file starts with a short "How to build this plan" section for the builder.
+Slices come in build order, with steps as checkboxes and verify commands in a `bash` block.
+The output is deterministic and stable under prettier.
+
+- It goes to `docs/plans/<slug>.md`, or the directory from `--architect-plan-dir`.
+- It never overwrites a file. A taken name gets `-2`, `-3` and so on.
+- The extension writes it with Node, not through the edit or write tools, so the read-only guard stays as strict.
+- `architect_slice` rejects duplicate ids, unknown dependencies, cycles, vague steps and slices without a verify command.
 
 ## v1 build order
 

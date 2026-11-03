@@ -27,14 +27,26 @@ Each Pi session has a mode. **Build** is normal Pi and the default. **Architect*
 - Bash only runs read-only commands. `ls && rm x`, `echo x > file` and `$(…)` are blocked, and the agent is told why.
 - The agent records the design with `architect_update`.
 - The agent calls `architect_advance` when a phase is done. You approve it or ask for changes with a comment.
+- The agent splits the work into slices with `architect_slice`. Each slice has files, concrete steps and verify commands.
 
-| Command                          | What it does                              |
-| -------------------------------- | ----------------------------------------- |
-| `/architect <feature>`           | Architect mode, on a new feature          |
-| `/architect reset`               | Discard the architecture in this session  |
-| `/mode architect`, `/mode build` | Switch mode. `/mode` alone opens a picker |
-| `ctrl+alt+a`                     | Toggle the mode                           |
-| `pi --architect`                 | Start in architect mode                   |
+When you approve the Blueprint, the plan is written to `docs/plans/<feature>.md`. An existing file is never overwritten: the name gets `-2`, `-3` and so on.
+Change the directory with `pi --architect-plan-dir <dir>`.
+
+In build mode a line above the editor shows the progress: `▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   slice 3/4 · Store dedup key`.
+The builder ticks the boxes in the plan file as it works, so the plan file is where progress lives.
+
+| Command                          | What it does                                 |
+| -------------------------------- | -------------------------------------------- |
+| `/architect <feature>`           | Architect mode, on a new feature             |
+| `/architect reset`               | Discard the architecture in this session     |
+| `/plan`                          | Show the plan and its progress, with actions |
+| `/plan build`                    | Build the plan in a new session              |
+| `/plan here`                     | Build the plan in this session               |
+| `/plan copy`, `/plan open`       | Copy the plan path, or open the file         |
+| `/plan write`                    | Write the plan file again when it is missing |
+| `/mode architect`, `/mode build` | Switch mode. `/mode` alone opens a picker    |
+| `ctrl+alt+a`                     | Toggle the mode                              |
+| `pi --architect`                 | Start in architect mode                      |
 
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
 
@@ -46,8 +58,7 @@ The mode and the design live in the session. They survive reload and resume. For
 - Read-only mode with a checked bash allowlist.
 - The phase gate with a simple approve or request-changes dialog.
 - The brief, modules, findings and risks.
-
-Decision cards, diagrams, slices, the plan file and `/board` come next.
+- Slices with a checked dependency graph, the plan file and build progress.
 
 ## Develop
 
