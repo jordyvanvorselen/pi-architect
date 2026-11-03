@@ -1,34 +1,56 @@
 # pi-architect design
 
-pi-architect adds an architecture mode to Pi. You use it to design one feature before anyone builds it.
-The agent moves through five phases and shows each one visually. You approve every phase before the agent moves on.
+pi-architect adds an architect mode to Pi. You use it to design one feature before anyone builds it.
+The agent moves through the phases and shows each one visually. You approve every phase before the agent moves on.
 The result is a plan file that another agent can build from without any other context.
 
 ## Goals
 
 - **The user decides.** The agent proposes. The user approves, picks or asks for changes at every gate.
 - **Visual, not chatty.** Each phase has its own screen. The user sees the design, not walls of text.
-- **The model sends data, the extension draws it.** The model never draws ASCII art. It sends structured JSON and the extension renders it with Pi's theme.
+- **The model sends data, the extension draws it.** Cards come from structured JSON, drawn with Pi's theme. Diagrams are the one exception: the agent draws them in Unicode, and the extension checks and highlights them.
 - **Few tokens.** Rendered cards live in session entries that the model never sees.
 - **A plan another agent can build.** The plan file holds every decision, the reasons and a way to verify each slice.
 
-## Scope of a session
+## Modes
 
-One feature per session. `/architect <feature>` starts it. The session ends when the user approves the Blueprint or runs `/architect abort`.
+Every Pi session has a mode: **architect** or **build**. The user sets it. A new session starts in build mode, which is normal Pi.
+
+| Mode      | Tools                                                          | The agent                                              |
+| --------- | -------------------------------------------------------------- | ------------------------------------------------------ |
+| architect | Read-only. Edit and write are off. The architect tools are on. | Walks through the phases. The user approves each gate. |
+| build     | All normal tools. The architect tools are off.                 | Builds, from the approved plan if there is one.        |
+
+- `/mode architect` and `/mode build` switch. `/mode` alone opens a picker.
+- `ctrl+alt+a` toggles the mode. Pi does not bind this key.
+- `pi --architect` starts in architect mode.
+- `/architect <feature>` switches to architect mode, names the feature and starts the agent on Frame.
+- `/architect reset` discards the architecture in this session, after a confirmation.
+
+The mode is stored in the session, so it survives reload and resume. The footer always shows it: `◆ architect · Decide` or `▸ build`.
+
+If the user enters architect mode without naming a feature, their first prompt describes it. The agent names it in Frame.
+
+Leaving architect mode before the Blueprint is approved asks for confirmation. Coming back resumes at the same phase.
+Each switch shows as a small line in the transcript. The model hears about it once, on its next turn.
+
+One architecture per session. A new `/architect <feature>` replaces it, after a confirmation.
 
 ## Phases
 
 The agent moves through the phases in order. It cannot skip one.
 
-| Phase       | What the agent does                                      | Review screen shows                                                       | The user approves            |
-| ----------- | -------------------------------------------------------- | ------------------------------------------------------------------------- | ---------------------------- |
-| **Frame**   | Writes the goal, constraints, out of scope and done-when | A brief card                                                              | The scope                    |
-| **Explore** | Reads the code without changing it                       | A module map with the touched parts highlighted, and key findings         | That the agent understood it |
-| **Decide**  | Raises each open question as a decision                  | One decision card per question                                            | Each choice                  |
-| **Design**  | Describes components, data flow and sequences            | Component graphs and sequence diagrams, new and changed parts highlighted | The shape                    |
-| **Slice**   | Splits the work into buildable slices with dependencies  | A dependency graph of slices, each with files and checks                  | The build order              |
+| Phase       | What the agent does                                      | Review screen shows                                               | The user approves            |
+| ----------- | -------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------- |
+| **Frame**   | Writes the goal, constraints, out of scope and done-when | A brief card                                                      | The scope                    |
+| **Explore** | Reads the code without changing it                       | A module map with the touched parts highlighted, and key findings | That the agent understood it |
+| **Decide**  | Raises each open question as a decision                  | One decision card per question                                    | Each choice                  |
+| **Design**  | Draws components, data flow and key flows as diagrams    | The diagrams, with new, changed and removed parts highlighted     | The shape                    |
+| **Slice**   | Splits the work into buildable slices with dependencies  | A dependency graph of slices, each with files and checks          | The build order              |
 
-After Slice, the **Blueprint** screen shows everything on one page. Approving it writes the plan file.
+After Slice, the **Blueprint** phase shows everything on one page. Approving it makes the plan final and writes the plan file.
+
+A phase cannot go to review while it is incomplete. `architect_advance` then tells the agent what is missing, for example the goal or a verify step.
 
 ### The gate loop
 
@@ -44,11 +66,16 @@ After Slice, the **Blueprint** screen shows everything on one page. Approving it
 
 ## The stepper widget
 
-A widget above the editor shows the current phase and what is still open:
+In architect mode a widget above the editor shows the phases and what is still open:
 
 ```
- ◆ ARCHITECT  Frame ━━ Explore ━━ ●Decide ━━ Design ━━ Slice      3 open · 2 decided · ⚠ 1 risk
+ ◆ ARCHITECT  dedupe-panel-events  ✓ Frame ━━ ✓ Explore ━━ ● Decide ┄┄ Design ┄┄ Slice ┄┄ Blueprint   3 open · 2 decided · ⚠ 1 risk
 ```
+
+Approved phases are green, the current one is in the accent colour and the pending ones are dim.
+A phase in review is yellow. On narrow terminals the line drops the feature name, then the counters, then shortens the phase names.
+
+In build mode with an approved plan, the widget shows slice progress instead.
 
 ## The decision card
 
@@ -73,15 +100,13 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 
 ## Diagrams
 
-The model sends a graph (`{ nodes, edges, groups }`) or a sequence (`{ participants, messages }`).
-The extension lays it out and draws it with Unicode box characters in theme colours:
+The agent draws each diagram itself in Unicode box characters. A diagram has a title, a body and an optional caption.
+The agent marks parts with `[new]`, `[changed]` or `[removed]`.
 
-- green for new parts
-- yellow for changed parts
-- dim for untouched parts
+The extension does not lay anything out. It checks the diagram, for example that it fits the width.
+It shows the diagram in theme colours, with the `[new]`, `[changed]` and `[removed]` parts highlighted.
 
-v1 renders Unicode only. Image rendering through Pi's `Image` component can come later.
-Every diagram must fit the available width. Tests cover narrow widths.
+v1 shows Unicode only. Image rendering through Pi's `Image` component can come later. Tests cover narrow widths.
 
 ## The board
 
@@ -91,30 +116,35 @@ It shows the whole design at once. Every action has a keyboard path. Mouse works
 ## The model-facing surface
 
 Five tools. Tool schemas are sent on every request, so the surface stays small.
+The tools are only active in architect mode, so build mode does not pay for them.
 
-| Tool                | Blocks | Purpose                                                       |
-| ------------------- | ------ | ------------------------------------------------------------- |
-| `architect_update`  | no     | Fill in phase content: brief, findings, risks                 |
-| `architect_decide`  | yes    | Show a decision card and wait for the user's choice           |
-| `architect_diagram` | no     | Send a structured graph or sequence for the extension to draw |
-| `architect_slice`   | no     | Define slices and their dependencies                          |
-| `architect_advance` | yes    | Ask to move to the next phase. Opens the Phase Review screen  |
+| Tool                | Blocks | Purpose                                                              |
+| ------------------- | ------ | -------------------------------------------------------------------- |
+| `architect_update`  | no     | Fill in phase content: feature name, brief, modules, findings, risks |
+| `architect_decide`  | yes    | Show a decision card and wait for the user's choice                  |
+| `architect_diagram` | no     | Send a Unicode diagram for the extension to check and show           |
+| `architect_slice`   | no     | Define slices and their dependencies                                 |
+| `architect_advance` | yes    | Ask to move to the next phase. Opens the Phase Review screen         |
 
 ## User commands
 
-- `/architect <feature>` starts a session.
+- `/mode [architect|build]` switches the mode.
+- `/architect <feature>` switches to architect mode and starts on a feature.
+- `/architect reset` discards the architecture.
 - `/board` opens the fullscreen overview.
-- `/architect abort` ends the session without a plan file.
 
-## Read-only while architecting
+## Read-only in architect mode
 
-- Edit and write tools are off.
-- Bash runs through an allowlist of read-only commands, like Pi's plan-mode example.
+- Edit and write tools are off. A call that gets through anyway is blocked with a reason.
+- Bash runs only allowlisted read-only commands. Every command in a chain or pipeline must pass.
+  Output redirection to files, command substitution, subshells, here-documents and background jobs are blocked.
+  Commands that can also write, like `git`, `sed`, `find` and `sort`, are checked argument by argument.
+- A blocked call tells the model why, so it can pick a read-only way.
 - The only file the extension writes is the plan file, and only after the user approves the Blueprint.
 
 ## State
 
-- Every change is a session entry (`pi.appendEntry`). The extension rebuilds state from the current branch.
+- Every change, including a mode switch, is a session entry (`pi.appendEntry`). A pure reducer rebuilds the state from the current branch.
 - A fork in the session tree is a what-if branch. The user can fork at a decision, pick another option and compare.
 - Decision cards and diagrams render in the transcript through `pi.registerEntryRenderer`. They never reach the model.
 
@@ -143,7 +173,7 @@ The chosen option, the rejected options and why. The builder does not reopen the
 
 # Design
 
-Diagrams in Unicode (readable anywhere) and Mermaid source (renders on GitHub).
+Each diagram body in a fenced code block, with its title and caption.
 
 # Slices
 
@@ -158,7 +188,7 @@ Diagrams in Unicode (readable anywhere) and Mermaid source (renders on GitHub).
 ## v1 build order
 
 1. Repository setup: CI, publish workflow, lint, prettier, tsconfig, test harness.
-2. State, phases, read-only mode and the stepper widget.
+2. State, modes, phases, read-only mode and the stepper widget.
 3. Decision card and Phase Review screen.
 4. Unicode diagram renderer, with tests at narrow widths.
 5. Plan file writer and Blueprint screen.
