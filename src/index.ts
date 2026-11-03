@@ -8,6 +8,7 @@ import { renderPlan } from "./plan/render.ts";
 import { DEFAULT_PLAN_DIR, displayPath, planFile, readPlan, writePlan } from "./plan/write.ts";
 import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, SECTION } from "./prompt.ts";
 import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
+import type { DecisionUi } from "./decision.ts";
 import { selectReview, type ReviewUi } from "./review.ts";
 import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state/events.ts";
 import { slugify } from "./state/queries.ts";
@@ -15,8 +16,10 @@ import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/
 import type { ArchitectState, Mode } from "./state/types.ts";
 import { advance, AdvanceParams, type AdvanceDetails, type Finalized } from "./tools/advance.ts";
 import { planSlices, prepareSliceArgs, SliceParams, type SliceDetails } from "./tools/slice.ts";
+import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
+import { decisionCard } from "./ui/decision/index.ts";
 import type { Paint } from "./ui/paint.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
 import { renderBuildProgress, type BuildView } from "./ui/progress.ts";
@@ -42,6 +45,8 @@ const OFF_IN_ARCHITECT: readonly string[] = [...WRITE_TOOLS, "powershell"];
 export interface ArchitectOverrides {
 	/** Replaces the phase review screen. */
 	review?: ReviewUi;
+	/** Replaces the decision card. */
+	decide?: DecisionUi;
 	now?: () => number;
 	/** Where plan files go, relative to the cwd or absolute. Beats the flag. Default `docs/plans`. */
 	planDir?: string;
@@ -295,6 +300,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	});
 
 	registerDiagramTool(pi, { state: () => state, append, has });
+	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? decisionCard });
 
 	pi.registerTool({
 		name: "architect_slice",

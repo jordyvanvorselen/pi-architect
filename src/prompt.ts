@@ -31,12 +31,16 @@ export function phaseGuidance(phase: Phase, has: ToolCheck, arch?: Architecture)
 				`Record key findings and existing patterns with architect_update({ findings }).${has("architect_diagram") ? " Sketch the current architecture with architect_diagram when a picture helps." : ""}`,
 			];
 		case "decide":
-			return [
-				has("architect_decide")
-					? "Raise each open question with architect_decide: 2 to 4 options with pros, cons, effort, risk and one recommendation. It waits for the user's choice."
-					: "Ask the user each open question, one at a time: 2 to 4 options with pros, cons, effort and risk, and your recommendation. Wait for each answer.",
-				"Do not reopen a decided question unless the user asks.",
-			];
+			return has("architect_decide")
+				? [
+						"Raise open questions one at a time with architect_decide: 2 to 4 real alternatives, honest effort and risk (1 to 5), and one recommendation with a reason.",
+						"It waits for the user. If they ask a question instead, answer it briefly, then call architect_decide again with the same id.",
+						"Do not reopen a decided question unless the user asks.",
+					]
+				: [
+						"Ask the user each open question, one at a time: 2 to 4 options with pros, cons, effort and risk, and your recommendation. Wait for each answer.",
+						"Do not reopen a decided question unless the user asks.",
+					];
 		case "design":
 			return [
 				has("architect_diagram")

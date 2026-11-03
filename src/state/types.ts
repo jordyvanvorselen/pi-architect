@@ -55,6 +55,8 @@ export interface DecisionOption {
 	cons: string[];
 	effort: Level;
 	risk: Level;
+	/** The user wrote this option on the decision card. The agent did not rate its effort and risk. */
+	byUser?: boolean;
 }
 
 /** Decide: one open question. Open while `chosen` is undefined. */
@@ -65,6 +67,8 @@ export interface Decision {
 	options: DecisionOption[];
 	/** Option id the agent recommends. */
 	recommendation?: string;
+	/** Why the agent recommends it, in one line. */
+	reason?: string;
 	/** Option id the user picked. */
 	chosen?: string;
 	/** What the user said with the choice, e.g. "Pick B, but only for alarms". */

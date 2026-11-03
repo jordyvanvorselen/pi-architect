@@ -85,7 +85,7 @@ describe("renderPlan", () => {
 			...newArchitecture(1, "", ""),
 			decisions: [
 				{
-					id: "d1",
+					id: "q1",
 					question: "Which one?",
 					options: [{ id: "A", title: "a", pros: [], cons: [], effort: 1, risk: 1 }],
 				},
