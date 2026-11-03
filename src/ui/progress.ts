@@ -1,5 +1,5 @@
 import { isDone, sliceStates, type SliceProgress, type SliceState } from "../plan/progress.ts";
-import { clip, firstFit, join, paintSeg, seg, width, type Paint, type Seg } from "./paint.ts";
+import { clip, firstFit, join, paintSeg, seg, spread, width, type Paint, type Seg } from "./paint.ts";
 
 /** Longest plan name the widget shows before it cuts it. */
 const NAME_MAX = 32;
@@ -30,9 +30,9 @@ function glyphs(slices: readonly SliceProgress[], states: SliceState[], numbered
  * The build widget above the editor, for a session with an approved plan:
  * ` ▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   slice 3/4 · Store dedup key`.
  * At narrow widths it cuts the title, then drops the plan name, the title and the numbers, so the line
- * always fits.
+ * always fits. `hint`, e.g. `ctrl+alt+b board`, goes at the right edge while the whole line fits with it.
  */
-export function renderBuildProgress(view: BuildView, total: number, paint: Paint): string {
+export function renderBuildProgress(view: BuildView, total: number, paint: Paint, hint?: string): string {
 	const pad = seg(" ");
 	const gap = seg("  ");
 	const wide = seg("   ");
@@ -79,8 +79,11 @@ export function renderBuildProgress(view: BuildView, total: number, paint: Paint
 	};
 	const withRun = (head: Seg[], run: Seg) => (width(run) ? line(...head, gap, run, wide) : line(...head, gap));
 
+	const first = status(withRun([brand, gap, name], full), false);
+	const hinted = first && hint ? spread(first, paintSeg(paint, "dim", hint), total, 3) : undefined;
+	if (hinted !== undefined) return hinted;
 	const candidates = [
-		status(withRun([brand, gap, name], full), false),
+		first,
 		status(withRun([brand, gap, name], full), true),
 		status(withRun([brand], full), false),
 		status(withRun([brand], full), true),

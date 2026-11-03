@@ -4,7 +4,7 @@ import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
 import { clip, firstFit, join, paintSeg, seg, spread } from "../src/ui/paint.ts";
-import { LineComponent, renderStepper } from "../src/ui/stepper.ts";
+import { LineComponent, renderStepper, renderSteps } from "../src/ui/stepper.ts";
 import { modeStatus } from "../src/ui/status.ts";
 import { assertComponentFits, assertFits, plainTheme, tagTheme, untag } from "./helpers.ts";
 
@@ -106,6 +106,29 @@ describe("stepper", () => {
 					(width, theme) => [renderStepper(arch({ phase, status }), width, theme)],
 					[10, 20, 30, 40, 60, 80, 100, 120],
 				);
+	});
+
+	it("adds a key hint after the counters while it fits, and drops it first", () => {
+		const hint = "ctrl+alt+b board";
+		assert.match(renderStepper(arch(), 160, plainTheme, hint), /3 open · 2 decided · ⚠ 1 risk {3}ctrl\+alt\+b board$/);
+		assert.equal(renderStepper(arch(), 110, plainTheme, hint), at(110));
+		const bare = arch({ feature: "", decisions: [], risks: [] });
+		assert.match(renderStepper(bare, 120, plainTheme, hint), /Blueprint {3,}ctrl\+alt\+b board$/);
+		assertFits((width, theme) => [renderStepper(arch(), width, theme, hint)], [10, 40, 80, 120, 200]);
+	});
+
+	it("shows the phases alone for the board, as short as the width needs", () => {
+		assert.equal(
+			renderSteps(arch(), 100, plainTheme),
+			"✓ Frame ━━ ✓ Explore ━━ ● Decide ┄┄ Design ┄┄ Slice ┄┄ Blueprint",
+		);
+		assert.equal(renderSteps(arch(), 60, plainTheme), "✓ Frm ━━ ✓ Exp ━━ ● Decide ┄┄ Dsn ┄┄ Slc ┄┄ Bpt");
+		assert.equal(renderSteps(arch(), 30, plainTheme), "✓ ━ ✓ ━ ● Decide ┄ ○ ┄ ○ ┄ ○");
+		assert.equal(renderSteps(arch(), 12, plainTheme), "Decide 3/6");
+		assert.equal(
+			renderSteps(arch({ status: "review" }), 12, tagTheme),
+			"<warning><b>Decide</b></warning><dim> 3/6</dim>",
+		);
 	});
 });
 

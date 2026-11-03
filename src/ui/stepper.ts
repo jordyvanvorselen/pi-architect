@@ -56,12 +56,32 @@ function counters(arch: Architecture, paint: Paint): Seg {
 }
 
 /**
+ * The phases alone, as wide as fits: `✓ Frame ━━ ● Explore ┄┄ Decide …`, then short names, then glyphs,
+ * then only the current phase. The board shows this under its title.
+ */
+export function renderSteps(arch: Architecture, total: number, paint: Paint): string {
+	const color = arch.approvedAt === undefined && arch.status === "review" ? "warning" : "accent";
+	return firstFit(
+		[
+			steps(arch, "full", paint),
+			steps(arch, "short", paint),
+			steps(arch, "glyph", paint),
+			join([
+				paintSeg(paint, color, PHASE_LABEL[arch.phase], true),
+				paintSeg(paint, "dim", ` ${phaseIndex(arch.phase) + 1}/${PHASES.length}`),
+			]),
+		],
+		total,
+	);
+}
+
+/**
  * The stepper line above the editor in architect mode:
  * ` ◆ ARCHITECT  dedupe-panel-events  ✓ Frame ━━ ● Explore ┄┄ Decide …      3 open · ⚠ 1 risk`.
  * At narrow widths it drops the feature, then the counters, then shortens the phase names, so the
- * line always fits.
+ * line always fits. `hint`, e.g. `ctrl+alt+b board`, goes after the counters while there is room for it.
  */
-export function renderStepper(arch: Architecture, total: number, paint: Paint): string {
+export function renderStepper(arch: Architecture, total: number, paint: Paint, hint?: string): string {
 	const brand = paintSeg(paint, "accent", "◆ ARCHITECT", true);
 	const mark = paintSeg(paint, "accent", "◆", true);
 	const feature = arch.feature ? paintSeg(paint, "text", clip(arch.feature, FEATURE_MAX)) : undefined;
@@ -74,6 +94,14 @@ export function renderStepper(arch: Architecture, total: number, paint: Paint): 
 	const short = steps(arch, "short", paint);
 	const glyph = steps(arch, "glyph", paint);
 	const wide: Seg[] = [...(feature ? [line(brand, gap, feature, gap, full)] : []), line(brand, gap, full)];
+	if (hint) {
+		const key = paintSeg(paint, "dim", hint);
+		const withHint = width(right) > 0 ? join([right, paintSeg(paint, "dim", "   "), key]) : key;
+		for (const left of wide) {
+			const fitted = spread(left, withHint, total, 3);
+			if (fitted !== undefined) return fitted;
+		}
+	}
 	if (width(right) > 0) {
 		for (const left of wide) {
 			const fitted = spread(left, right, total);
