@@ -86,8 +86,9 @@ export function sliceProblems(slices: readonly Slice[]): string[] {
 /**
  * What the current phase still needs before the user can review it. Empty means ready.
  * The agent gets this list instead of a review screen, so the user is not asked to review half a phase.
+ * `has` tells which tools exist: a phase does not require content that no registered tool can add.
  */
-export function missing(arch: Architecture): string[] {
+export function missing(arch: Architecture, has: (tool: string) => boolean = () => true): string[] {
 	const { brief } = arch;
 	switch (arch.phase) {
 		case "frame":
@@ -105,6 +106,7 @@ export function missing(arch: Architecture): string[] {
 		case "design":
 			return [];
 		case "slice": {
+			if (!has("architect_slice")) return [];
 			if (!arch.slices.length) return ["at least one slice"];
 			const unverified = arch.slices.filter((s) => !s.verify.length).map((s) => s.id);
 			return [

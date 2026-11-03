@@ -71,17 +71,17 @@ export interface Decision {
 	comment?: string;
 }
 
-export type DiagramKind = "graph" | "sequence";
-
 /**
- * Design: one diagram. `data` is a `GraphDiagram` or `SequenceDiagram` from `src/diagram/types.ts`.
- * The state keeps it opaque so the reducer does not depend on the diagram renderer.
+ * Explore or Design: one Unicode diagram the agent drew. Fits `Diagram` from `src/diagram/types.ts`
+ * (`title`, `body`, `caption`) plus the id and the phase it belongs to. `[new]`, `[changed]` and `[removed]`
+ * markers in the body are highlighted when it is shown.
  */
 export interface Diagram {
 	id: string;
+	phase: Phase;
 	title: string;
-	kind: DiagramKind;
-	data: unknown;
+	body: string;
+	caption?: string;
 }
 
 /** Slice: one buildable piece of work. */
