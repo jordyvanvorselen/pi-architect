@@ -20,6 +20,7 @@ import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
 import { decisionCard } from "./ui/decision/index.ts";
+import { choiceEntry, SpanView, verdictEntry } from "./ui/entries.ts";
 import type { Paint } from "./ui/paint.ts";
 import { phaseReview } from "./ui/review/index.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
@@ -358,7 +359,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		},
 	});
 
-	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, _options, theme) => {
+	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, options, theme) => {
 		const e = entry.data;
 		const paint = theme as Paint;
 		if (!e) return undefined;
@@ -373,6 +374,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		if (e.type === "begin")
 			return new Text(`${paint.fg("accent", "◆")} ${paint.fg("text", `architecting "${e.feature}"`)}`, 0, 0);
 		if (e.type === "reset") return new Text(paint.fg("dim", "■ architecture discarded"), 0, 0);
+		if (e.type === "choice") {
+			const decision = state.architecture?.decisions.find((d) => d.id === e.id);
+			return new SpanView(paint, choiceEntry(e, decision, options.expanded));
+		}
+		if (e.type === "verdict") return new SpanView(paint, verdictEntry(e, options.expanded));
 		if (e.type === "plan")
 			return new Text(
 				`${paint.fg("success", "▣ plan")} ${paint.fg("text", e.path)}  ${paint.fg("dim", "/plan to build it")}`,
