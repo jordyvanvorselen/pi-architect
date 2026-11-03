@@ -341,6 +341,9 @@ function diagramsContent(arch: Architecture, paint: Paint): TabContent {
 
 const SEVERITY_BAR: Record<Risk["severity"], string> = { high: "▰▰▰", medium: "▰▰▱", low: "▰▱▱" };
 
+/** Narrower than this, a risk's text goes under its severity instead of beside it. */
+const RISK_SIDE = 56;
+
 function riskLines(risk: Risk, width: number): Line[] {
 	const color = SEVERITY_COLOR[risk.severity];
 	const prefix: Line = [
@@ -348,9 +351,12 @@ function riskLines(risk: Risk, width: number): Line[] {
 		sp(SEVERITY_BAR[risk.severity], color),
 		sp(` ${risk.severity.padEnd(7)}`, color, risk.severity === "high"),
 	];
-	const lines = wrapAfter(prefix, risk.text, width, "text");
-	if (risk.mitigation)
-		lines.push(...wrapAfter([sp(" ".repeat(lineWidth(prefix))), sp("↳ ", "dim")], risk.mitigation, width, "muted"));
+	const side = width >= RISK_SIDE;
+	const indent: Line = [sp(" ".repeat(side ? lineWidth(prefix) : 4))];
+	const lines = side
+		? wrapAfter(prefix, risk.text, width, "text")
+		: [prefix, ...wrapAfter(indent, risk.text, width, "text")];
+	if (risk.mitigation) lines.push(...wrapAfter([...indent, sp("↳ ", "dim")], risk.mitigation, width, "muted"));
 	return lines;
 }
 
@@ -360,17 +366,19 @@ function risksContent(arch: Architecture): TabContent {
 	return {
 		...(sorted.length
 			? {
-					head: (w: number) => [
-						clipLine(
-							(["high", "medium", "low"] as const).flatMap((s, i) => [
-								...(i ? [sp("   ")] : []),
-								sp(`${SEVERITY_BAR[s]} `, SEVERITY_COLOR[s]),
-								sp(`${count(s)} ${s}`, count(s) ? "text" : "dim"),
-							]),
-							w,
-						),
-						[],
-					],
+					head: (w: number) => {
+						const levels = ["high", "medium", "low"] as const;
+						const bars = levels.flatMap((s, i) => [
+							...(i ? [sp("   ")] : []),
+							sp(`${SEVERITY_BAR[s]} `, SEVERITY_COLOR[s]),
+							sp(`${count(s)} ${s}`, count(s) ? "text" : "dim"),
+						]);
+						const plain = levels.flatMap((s, i) => [
+							...(i ? [sp(" · ", "dim")] : []),
+							sp(`${count(s)} ${s}`, count(s) ? SEVERITY_COLOR[s] : "dim"),
+						]);
+						return [clipLine(lineWidth(bars) <= w ? bars : plain, w), []];
+					},
 				}
 			: {}),
 		items: sorted.map((r) => ({
