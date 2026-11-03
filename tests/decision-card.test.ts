@@ -4,9 +4,10 @@ import { visibleWidth } from "@earendil-works/pi-tui";
 import type { DecisionAnswer, DecisionRequest } from "../src/decision.ts";
 import type { Decision, DecisionOption } from "../src/state/types.ts";
 import { chooseLayout, frameWidth, renderDecision, split } from "../src/ui/decision/card.ts";
-import { DecisionCard } from "../src/ui/decision/index.ts";
+import { createDecisionCard, DecisionCard } from "../src/ui/decision/index.ts";
+import type { GraceOptions } from "../src/ui/grace.ts";
 import { paintLine } from "../src/ui/spans.ts";
-import { ansiTheme, assertFits, KEYS, plain, plainTheme, tagTheme, type } from "./helpers.ts";
+import { ansiTheme, assertFits, FakeUi, KEYS, plain, plainTheme, tagTheme, type } from "./helpers.ts";
 
 const option = (id: string, title: string, over: Partial<DecisionOption> = {}): DecisionOption => ({
 	id,
@@ -33,7 +34,8 @@ const DECISION: Decision = {
 
 const FOUR: Decision = { ...DECISION, options: [...DECISION.options, option("D", "Client side")] };
 
-function card(request: Partial<DecisionRequest> = {}, rows = 200) {
+/** A card without the input grace period unless `grace` says otherwise, so keys land at once. */
+function card(request: Partial<DecisionRequest> = {}, rows = 200, grace: GraceOptions = { graceMs: 0 }) {
 	const answers: (DecisionAnswer | undefined)[] = [];
 	let renders = 0;
 	const tui = { requestRender: () => renders++, terminal: { rows } };
@@ -42,6 +44,7 @@ function card(request: Partial<DecisionRequest> = {}, rows = 200) {
 		plainTheme,
 		{ decision: DECISION, index: 3, total: 5, feature: "Dedupe", ...request },
 		(a) => answers.push(a),
+		grace,
 	);
 	component.focused = true;
 	const keys = (...data: string[]) => data.forEach((d) => component.handleInput(d));
@@ -292,5 +295,40 @@ describe("decision card keys", () => {
 		c.component.focused = true;
 		c.component.invalidate();
 		assert.ok(c.component.render(80).join("").includes("\x1b_pi:c"));
+	});
+});
+
+describe("decision card grace period", () => {
+	it("ignores ↵, c, n and ? for 300 ms after it opens, while the arrows still move", () => {
+		let t = 1_000;
+		const c = card({}, 200, { now: () => t });
+		c.keys(KEYS.enter, "c", "n", "?");
+		assert.deepEqual(c.answers, [], "a stray ↵ does not choose");
+		assert.equal(c.component.state.mode, "browse", "no editor opens");
+		c.keys(KEYS.right, "3");
+		assert.equal(c.component.state.focus, "C");
+		t += 299;
+		c.keys(KEYS.enter);
+		assert.deepEqual(c.answers, []);
+		t += 1;
+		c.keys(KEYS.enter);
+		assert.deepEqual(c.answers, [{ kind: "choose", option: "C" }]);
+	});
+
+	it("still closes with esc during the grace period", () => {
+		const c = card({}, 200, { now: () => 0 });
+		c.keys(KEYS.escape);
+		assert.deepEqual(c.answers, [undefined]);
+	});
+
+	it("gets its clock and length from the factory", async () => {
+		let t = 0;
+		const ui = new FakeUi().keys([KEYS.enter, () => (t = 50), KEYS.enter]);
+		const answer = await createDecisionCard({ now: () => t, graceMs: 50 })({ decision: DECISION }, {
+			mode: "tui",
+			ui,
+		} as never);
+		assert.deepEqual(answer, { kind: "choose", option: "A" });
+		assert.equal(ui.customs[0]!.frames.length, 3, "the first ↵ was ignored");
 	});
 });
