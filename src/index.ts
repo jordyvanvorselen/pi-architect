@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text, type AutocompleteItem, type TUI } from "@earendil-works/pi-tui";
 import { planCommand, PLAN_SUBCOMMANDS } from "./plan/command.ts";
 import { buildSection } from "./plan/handoff.ts";
@@ -38,6 +38,9 @@ export const SHORTCUT = "ctrl+alt+a";
 export const FLAG = "architect";
 /** `--architect-plan-dir <dir>`: where plan files go, relative to the cwd. */
 export const PLAN_DIR_FLAG = "architect-plan-dir";
+/** The first words `/architect` reserves. Anything else names a feature. */
+export const SUBCOMMAND_NAMES = ["board", "plan", "build", "reset"] as const;
+type Subcommand = (typeof SUBCOMMAND_NAMES)[number];
 
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
@@ -56,9 +59,9 @@ export interface ArchitectOverrides {
 	inputGrace?: number;
 	/** Where plan files go, relative to the cwd or absolute. Beats the flag. Default `docs/plans`. */
 	planDir?: string;
-	/** Copies text to the clipboard, for `/plan copy`. */
+	/** Copies text to the clipboard, for "Copy the path" in `/architect plan`. */
 	copy?: (text: string) => Promise<void>;
-	/** Opens a file in the default app, for `/plan open`. */
+	/** Opens a file in the default app, for `/architect plan open`. */
 	open?: (file: string) => Promise<void>;
 }
 
@@ -170,7 +173,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			total: o.slice.steps.length + 1,
 			checked: 0,
 		}));
-		return { name, slices, problem: plan ? "plan file not found · /plan" : "plan not written · /plan write" };
+		return {
+			name,
+			slices,
+			problem: plan ? "plan file not found · /architect plan" : "plan not written · /architect plan write",
+		};
 	}
 
 	/** Re-read the plan file and redraw when its boxes changed. */
@@ -288,7 +295,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			ctxRef = ctx;
 			const arch = state.architecture;
 			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_update only works in architect mode. The user switches with /mode architect.");
+				throw new Error("architect_update only works in architect mode. The user switches with /architect.");
 			const plan = planUpdate(arch, params, has);
 			append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
@@ -370,7 +377,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			ctxRef = ctx;
 			const arch = state.architecture;
 			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_slice only works in architect mode. The user switches with /mode architect.");
+				throw new Error("architect_slice only works in architect mode. The user switches with /architect.");
 			const plan = planSlices(arch, params, has);
 			append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
@@ -417,148 +424,144 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		if (e.type === "verdict") return new SpanView(paint, verdictEntry(e, options.expanded));
 		if (e.type === "plan")
 			return new Text(
-				`${paint.fg("success", "▣ plan")} ${paint.fg("text", e.path)}  ${paint.fg("dim", "/plan to build it")}`,
+				`${paint.fg("success", "▣ plan")} ${paint.fg("text", e.path)}  ${paint.fg("dim", "/architect plan to build it")}`,
 				0,
 				0,
 			);
 		return undefined;
 	});
 
-	const modeItems: AutocompleteItem[] = [
-		{ value: "architect", label: "architect", description: "Design a feature first: read-only, phase by phase" },
-		{ value: "build", label: "build", description: "Normal Pi with all tools" },
-	];
+	/** Discard the architecture in this session, after a confirmation. */
+	async function reset(ctx: ExtensionCommandContext): Promise<void> {
+		const arch = state.architecture;
+		if (!arch || (isPristine(arch) && !arch.feature)) {
+			ctx.ui.notify("There is no architecture to discard.", "info");
+			return;
+		}
+		const name = arch.feature ? ` for "${arch.feature}"` : "";
+		if (ctx.hasUI && !(await ctx.ui.confirm("Discard the architecture?", `This discards the architecture${name}.`)))
+			return;
+		append({ type: "reset", at: now() });
+	}
 
-	pi.registerCommand("mode", {
-		description: "Switch between architect mode (design first, read-only) and build mode",
-		getArgumentCompletions: (prefix) => {
-			const items = modeItems.filter((i) => i.value.startsWith(prefix.trim()));
-			return items.length ? items : null;
-		},
-		handler: async (args, ctx) => {
-			ctxRef = ctx;
-			const wanted = args.trim().toLowerCase();
-			if (wanted === "architect" || wanted === "build") {
-				await setMode(wanted, ctx);
+	/** Architect mode on a named feature. A new name replaces the architecture, after a confirmation. */
+	async function begin(feature: string, ctx: ExtensionCommandContext): Promise<void> {
+		const arch = state.architecture;
+		const fresh = !arch || isPristine(arch);
+		if (arch && !fresh && arch.feature && arch.feature !== feature) {
+			if (!ctx.hasUI) {
+				ctx.ui.notify(`Already architecting "${arch.feature || "a feature"}". Run /architect reset first.`, "error");
 				return;
 			}
-			if (wanted) {
-				ctx.ui.notify(`Unknown mode "${wanted}". Use /mode architect or /mode build.`, "error");
-				return;
-			}
-			if (!ctx.hasUI) return;
-			const labels = modeItems.map((i) => `${i.value === state.mode ? "●" : "○"} ${i.value}: ${i.description}`);
-			const choice = await ctx.ui.select(`Mode (now ${state.mode})`, labels);
-			const picked = modeItems.find((_, i) => labels[i] === choice);
-			if (picked) await setMode(picked.value as Mode, ctx);
-		},
-	});
+			const ok = await ctx.ui.confirm(
+				`Architect "${feature}"?`,
+				`This discards the architecture${arch.feature ? ` for "${arch.feature}"` : ""}.`,
+			);
+			if (!ok) return;
+		}
+		let begun = fresh;
+		if (arch && !fresh && !arch.feature)
+			append({ type: "update", phase: arch.phase, feature: { name: feature, slug: slugify(feature) } });
+		else if (!arch || arch.feature !== feature) {
+			append({ type: "begin", feature, slug: slugify(feature), at: now() });
+			begun = true;
+		}
+		if (state.mode !== "architect") append({ type: "mode", mode: "architect", at: now() });
+		if (begun)
+			pi.sendMessage(
+				{
+					customType: KICKOFF_MESSAGE,
+					content: `Architect this feature: ${feature}. Start with the Frame phase.`,
+					display: false,
+				},
+				{ triggerTurn: true, deliverAs: "followUp" },
+			);
+	}
 
-	const architectItems: AutocompleteItem[] = [
-		{ value: "reset", label: "reset", description: "Discard the architecture in this session" },
-		{ value: "board", label: "board", description: "See the whole architecture on one screen and comment on it" },
+	/** `/architect plan [open|write|build]`: the plan path and progress, and what to do with the plan. */
+	async function plan(args: string, ctx: ExtensionCommandContext): Promise<void> {
+		await planCommand(args, ctx, {
+			state: () => state,
+			sync: syncProgress,
+			write: writePlanFile,
+			now,
+			buildHere: async (c, message) => {
+				if (state.mode !== "build" && !(await setMode("build", c))) return false;
+				pi.sendUserMessage(message, c.isIdle() ? undefined : { deliverAs: "followUp" });
+				return true;
+			},
+			copy: overrides.copy ?? (async (text) => (await import("@earendil-works/pi-coding-agent")).copyToClipboard(text)),
+			open: async (path) => {
+				const file = planFile(ctx.cwd, path);
+				if (overrides.open) return overrides.open(file);
+				const [cmd, ...args] =
+					process.platform === "darwin"
+						? ["open", file]
+						: process.platform === "win32"
+							? ["cmd", "/c", "start", "", file]
+							: ["xdg-open", file];
+				const result = await pi.exec(cmd!, args);
+				if (result.code !== 0) ctx.ui.notify(`Could not open ${path}. Open it yourself: ${file}`, "error");
+			},
+		});
+	}
+
+	/** The subcommands, in the order the completion and the picker show them. */
+	const SUBCOMMANDS: readonly { value: Subcommand; description: string; pick: string }[] = [
+		{ value: "board", description: "See the whole architecture on one screen", pick: "Open the board" },
+		{ value: "plan", description: "Show the plan and its progress, with actions", pick: "Plan: path and actions" },
+		{ value: "build", description: "Switch to build mode: normal Pi with all tools", pick: "Switch to build mode" },
+		{ value: "reset", description: "Discard the architecture in this session", pick: "Discard the architecture" },
 	];
+
+	async function run(sub: Subcommand, rest: string, ctx: ExtensionCommandContext): Promise<void> {
+		if (sub === "plan") return plan(rest, ctx);
+		if (rest) {
+			ctx.ui.notify(`/architect ${sub} takes no arguments. A feature name cannot start with "${sub}".`, "error");
+			return;
+		}
+		if (sub === "board") await showBoard(ctx);
+		else if (sub === "build") await setMode("build", ctx);
+		else await reset(ctx);
+	}
 
 	pi.registerCommand("architect", {
-		description:
-			"Architect a feature: /architect <feature> starts, /architect board shows it, /architect reset discards",
+		description: "Architect a feature before building it: /architect <feature>, or board, plan, build and reset",
 		getArgumentCompletions: (prefix) => {
-			const items = architectItems.filter((i) => i.value.startsWith(prefix.trim()));
+			const text = prefix.trimStart().toLowerCase();
+			const planArg = /^plan\s+(\S*)$/.exec(text);
+			const items: AutocompleteItem[] = planArg
+				? PLAN_SUBCOMMANDS.filter((s) => s.value.startsWith(planArg[1]!)).map((s) => ({
+						value: `plan ${s.value}`,
+						label: s.value,
+						description: s.description,
+					}))
+				: SUBCOMMANDS.filter((s) => s.value.startsWith(text)).map((s) => ({
+						value: s.value,
+						label: s.value,
+						description: s.description,
+					}));
 			return items.length ? items : null;
 		},
 		handler: async (args, ctx) => {
 			ctxRef = ctx;
-			const feature = args.trim();
-			if (feature === "board") {
-				await showBoard(ctx);
-				return;
-			}
-			if (feature === "reset") {
-				const arch = state.architecture;
-				if (!arch || (isPristine(arch) && !arch.feature)) {
-					ctx.ui.notify("There is no architecture to discard.", "info");
-					return;
-				}
-				const name = arch.feature ? ` for "${arch.feature}"` : "";
-				if (ctx.hasUI && !(await ctx.ui.confirm("Discard the architecture?", `This discards the architecture${name}.`)))
-					return;
-				append({ type: "reset", at: now() });
-				return;
-			}
-			if (!feature) {
+			const text = args.trim();
+			const [first = "", ...words] = text.split(/\s+/);
+			const sub = SUBCOMMANDS.find((s) => s.value === first.toLowerCase())?.value;
+			if (sub) return run(sub, words.join(" "), ctx);
+			if (text) return begin(text, ctx);
+			if (state.mode !== "architect" || !ctx.hasUI) {
 				await setMode("architect", ctx);
 				return;
 			}
-			const arch = state.architecture;
-			const fresh = !arch || isPristine(arch);
-			if (arch && !fresh && arch.feature && arch.feature !== feature) {
-				if (!ctx.hasUI) {
-					ctx.ui.notify(`Already architecting "${arch.feature || "a feature"}". Run /architect reset first.`, "error");
-					return;
-				}
-				const ok = await ctx.ui.confirm(
-					`Architect "${feature}"?`,
-					`This discards the architecture${arch.feature ? ` for "${arch.feature}"` : ""}.`,
-				);
-				if (!ok) return;
-			}
-			let begun = fresh;
-			if (arch && !fresh && !arch.feature)
-				append({ type: "update", phase: arch.phase, feature: { name: feature, slug: slugify(feature) } });
-			else if (!arch || arch.feature !== feature) {
-				append({ type: "begin", feature, slug: slugify(feature), at: now() });
-				begun = true;
-			}
-			if (state.mode !== "architect") append({ type: "mode", mode: "architect", at: now() });
-			if (begun)
-				pi.sendMessage(
-					{
-						customType: KICKOFF_MESSAGE,
-						content: `Architect this feature: ${feature}. Start with the Frame phase.`,
-						display: false,
-					},
-					{ triggerTurn: true, deliverAs: "followUp" },
-				);
-		},
-	});
-
-	pi.registerCommand("plan", {
-		description: "Show the approved plan and build it: /plan build starts a new session that builds it",
-		getArgumentCompletions: (prefix) => {
-			const items = PLAN_SUBCOMMANDS.filter((i) => i.value.startsWith(prefix.trim())).map((i) => ({
-				value: i.value,
-				label: i.value,
-				description: i.description,
-			}));
-			return items.length ? items : null;
-		},
-		handler: async (args, ctx) => {
-			ctxRef = ctx;
-			await planCommand(args, ctx, {
-				state: () => state,
-				sync: syncProgress,
-				write: writePlanFile,
-				now,
-				buildHere: async (c, message) => {
-					if (state.mode !== "build" && !(await setMode("build", c))) return false;
-					pi.sendUserMessage(message, c.isIdle() ? undefined : { deliverAs: "followUp" });
-					return true;
-				},
-				copy:
-					overrides.copy ?? (async (text) => (await import("@earendil-works/pi-coding-agent")).copyToClipboard(text)),
-				open: async (path) => {
-					const file = planFile(ctx.cwd, path);
-					if (overrides.open) return overrides.open(file);
-					const [cmd, ...args] =
-						process.platform === "darwin"
-							? ["open", file]
-							: process.platform === "win32"
-								? ["cmd", "/c", "start", "", file]
-								: ["xdg-open", file];
-					const result = await pi.exec(cmd!, args);
-					if (result.code !== 0) ctx.ui.notify(`Could not open ${path}. Open it yourself: ${file}`, "error");
-				},
-			});
+			// Already in architect mode: offer what there is to do.
+			const feature = state.architecture?.feature;
+			const picked = await ctx.ui.select(
+				`Architect mode${feature ? `: ${feature}` : ""}`,
+				SUBCOMMANDS.map((s) => s.pick),
+			);
+			const choice = SUBCOMMANDS.find((s) => s.pick === picked);
+			if (choice) await run(choice.value, "", ctx);
 		},
 	});
 

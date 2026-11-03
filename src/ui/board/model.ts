@@ -502,7 +502,7 @@ function planContent(data: BoardData, draft: () => string, env: BoardEnv): TabCo
 				? {
 						title: "Plan",
 						note: "file not found",
-						text: `The plan file ${data.plan.path} is missing. /plan write writes it again.`,
+						text: `The plan file ${data.plan.path} is missing. /architect plan write writes it again.`,
 					}
 				: { title: "Plan", text: "The plan appears here as the agent fills in the phases." },
 		};

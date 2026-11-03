@@ -229,7 +229,7 @@ describe("board tabs", () => {
 		assert.match(b.lines().join("\n"), /This session builds from docs\/plans\/dedupe\.md/);
 		const { planText: _text, ...noText } = data;
 		const missing = board(noText);
-		assert.match(missing.lines().join("\n"), /file not found[\s\S]*\/plan write/);
+		assert.match(missing.lines().join("\n"), /file not found[\s\S]*\/architect plan[\s\S]*write writes it again/);
 		const none = board({ mode: "build" });
 		assert.match(none.lines().join("\n"), /The plan appears here/);
 		none.press("2");
@@ -722,7 +722,7 @@ describe("openBoard", () => {
 		assert.deepEqual(
 			ui.notifications.map((n) => n.message),
 			[
-				"The board needs Pi's interactive terminal. /plan shows the plan.",
+				"The board needs Pi's interactive terminal. /architect plan shows the plan.",
 				"There is no architecture to show yet. /architect <feature> starts one.",
 			],
 		);

@@ -82,17 +82,17 @@ describe("build progress widget", () => {
 	});
 
 	it("shows a problem instead of the current slice", () => {
-		const view = { ...VIEW, problem: "plan file not found · /plan" };
+		const view = { ...VIEW, problem: "plan file not found · /architect plan" };
 		const lines = assertFits((width, theme) => [renderBuildProgress(view, width, theme)]);
 		assert.deepEqual(Object.fromEntries(lines), {
 			30: [" ▸ BUILD  ✓✓●○  ⚠"],
-			40: [" ▸ BUILD  plan file not found · /plan"],
-			80: [" ▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   plan file not found · /plan"],
-			120: [" ▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   plan file not found · /plan"],
+			40: [" ▸ BUILD  ✓✓●○  ⚠"],
+			80: [" ▸ BUILD  ✓1 ✓2 ●3 ○4   plan file not found · /architect plan"],
+			120: [" ▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   plan file not found · /architect plan"],
 		});
 		assert.equal(
-			at(80, { name: "x", slices: [], problem: "plan not written · /plan write" }),
-			" ▸ BUILD  plan: x  plan not written · /plan write",
+			at(80, { name: "x", slices: [], problem: "plan not written · /architect plan write" }),
+			" ▸ BUILD  plan: x  plan not written · /architect plan write",
 		);
 	});
 

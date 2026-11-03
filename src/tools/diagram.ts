@@ -185,7 +185,7 @@ export function registerDiagramTool(pi: ExtensionAPI, deps: DiagramToolDeps): vo
 			const state = deps.state();
 			const arch = state.architecture;
 			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_diagram only works in architect mode. The user switches with /mode architect.");
+				throw new Error("architect_diagram only works in architect mode. The user switches with /architect.");
 			const plan = planDiagram(arch, params, { has: deps.has });
 			if (!plan.event) return { content: [{ type: "text", text: plan.text }], details: plan.details, isError: true };
 			deps.append(plan.event);

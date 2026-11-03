@@ -5,7 +5,7 @@ import type { Finalized } from "../tools/advance.ts";
 import { kickoff } from "./handoff.ts";
 import { isDone, type SliceProgress } from "./progress.ts";
 
-/** What `/plan` needs from the extension. */
+/** What `/architect plan` needs from the extension. */
 export interface PlanCommandDeps {
 	state(): ArchitectState;
 	/** Re-read the plan file. Undefined when it cannot be read. */
@@ -19,16 +19,15 @@ export interface PlanCommandDeps {
 	now(): number;
 }
 
+/** The actions `/architect plan` takes as an argument. The picker offers a few more. */
 export const PLAN_SUBCOMMANDS = [
-	{ value: "build", description: "Build the plan in a new session" },
-	{ value: "here", description: "Build the plan in this session, in build mode" },
-	{ value: "copy", description: "Copy the plan path" },
 	{ value: "open", description: "Open the plan file in your default app" },
-	{ value: "path", description: "Show the plan path and progress" },
-	{ value: "write", description: "Write the plan file, when it is missing" },
+	{ value: "write", description: "Write the plan file again when it is missing" },
+	{ value: "build", description: "Build the plan in a new session" },
 ] as const;
 
-type Sub = (typeof PLAN_SUBCOMMANDS)[number]["value"];
+/** Every action: the typed ones, and the ones only the picker offers. */
+type Sub = (typeof PLAN_SUBCOMMANDS)[number]["value"] | "here" | "copy";
 
 const CHOICES: { sub: Sub; label: string }[] = [
 	{ sub: "build", label: "Build it in a new session" },
@@ -73,13 +72,14 @@ async function handoff(deps: PlanCommandDeps, ctx: ExtensionCommandContext): Pro
 }
 
 /**
- * `/plan [build|here|copy|open|path|write]`. Without an argument it shows the path and progress and offers
- * the actions. Without a plan it explains how to get one, or offers to write an approved one.
+ * `/architect plan [open|write|build]`. Without an argument it shows the path and progress and offers
+ * the actions, including building here and copying the path. Without a plan it explains how to get one,
+ * or offers to write an approved one.
  */
 export async function planCommand(args: string, ctx: ExtensionCommandContext, deps: PlanCommandDeps): Promise<void> {
 	const sub = args.trim().toLowerCase();
 	if (sub && !PLAN_SUBCOMMANDS.some((s) => s.value === sub)) {
-		ctx.ui.notify(`Unknown /plan action "${sub}". Use ${PLAN_SUBCOMMANDS.map((s) => s.value).join(", ")}.`, "error");
+		ctx.ui.notify(`Unknown /architect plan action "${sub}". Use open, write or build.`, "error");
 		return;
 	}
 	const state = deps.state();
@@ -95,7 +95,7 @@ export async function planCommand(args: string, ctx: ExtensionCommandContext, de
 			(ctx.hasUI && (await ctx.ui.confirm("Write the plan file?", "The plan is approved but has no file yet.")))
 		)
 			await write(deps, ctx);
-		else if (!ctx.hasUI) ctx.ui.notify("The plan is approved but has no file yet. Run /plan write.", "info");
+		else if (!ctx.hasUI) ctx.ui.notify("The plan is approved but has no file yet. Run /architect plan write.", "info");
 		return;
 	}
 
@@ -124,15 +124,12 @@ export async function planCommand(args: string, ctx: ExtensionCommandContext, de
 	const missing = !progress && ["build", "here", "open"].includes(choice);
 	if (missing) {
 		ctx.ui.notify(
-			`The plan file ${plan.path} is missing.${approved ? " Run /plan write to write it again." : ""}`,
+			`The plan file ${plan.path} is missing.${approved ? " Run /architect plan write to write it again." : ""}`,
 			"error",
 		);
 		return;
 	}
 	switch (choice) {
-		case "path":
-			ctx.ui.notify(where, "info");
-			return;
 		case "copy":
 			await deps.copy(plan.path);
 			ctx.ui.notify(`Copied ${plan.path}`, "info");

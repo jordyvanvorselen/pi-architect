@@ -74,7 +74,7 @@ export async function advance(
 	const state = deps.state();
 	const arch = state.architecture;
 	if (state.mode !== "architect" || !arch)
-		throw new Error("architect_advance only works in architect mode. The user switches with /mode architect.");
+		throw new Error("architect_advance only works in architect mode. The user switches with /architect.");
 	const phase = arch.phase;
 	const label = PHASE_LABEL[phase];
 	if (arch.approvedAt !== undefined) throw new Error("The plan is already approved. There is no next phase.");
@@ -141,9 +141,9 @@ export async function advance(
 			? ""
 			: "path" in written
 				? ` It is saved at ${written.path}.`
-				: ` Writing the plan file failed: ${written.error}. The user can retry with /plan write.`;
+				: ` Writing the plan file failed: ${written.error}. The user can retry with /architect plan write.`;
 		return result(
-			`The user approved the Blueprint. The plan is final.${note}${where} Tell the user they can build it with /plan, or switch to build mode with /mode build.`,
+			`The user approved the Blueprint. The plan is final.${note}${where} Tell the user they can build it with /architect plan, or switch to build mode with /architect build.`,
 			{
 				phase,
 				outcome: "approved",

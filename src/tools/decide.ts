@@ -129,7 +129,7 @@ const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLow
 export function planDecision(state: ArchitectState, input: DecideInput): Decision {
 	const arch = state.architecture;
 	if (state.mode !== "architect" || !arch)
-		throw new Error("architect_decide only works in architect mode. The user switches with /mode architect.");
+		throw new Error("architect_decide only works in architect mode. The user switches with /architect.");
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	if (arch.phase !== "decide")
 		throw new Error(

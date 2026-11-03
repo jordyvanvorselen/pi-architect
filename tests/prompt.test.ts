@@ -64,7 +64,7 @@ describe("architectSection", () => {
 		const text = architectSection({ mode: "architect", architecture: at({ feature: "", approvedAt: 3 }) }, all)!;
 		assert.match(text, /Feature: not named yet\./);
 		assert.match(text, /plan is final/);
-		assert.match(text, /\/mode build/);
+		assert.match(text, /\/architect build/);
 	});
 });
 

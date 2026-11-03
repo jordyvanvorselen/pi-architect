@@ -24,7 +24,7 @@ const SLICE = {
 async function architecting(ui = new FakeUi()) {
 	const h = harness({ ui });
 	await h.fire("session_start", { reason: "startup" });
-	await h.command("mode", "architect");
+	await h.command("architect");
 	return h;
 }
 
@@ -45,29 +45,45 @@ describe("registration", () => {
 			for (const line of tool.promptGuidelines!) assert.match(line, new RegExp(name));
 		}
 		assert.equal(h.tools.architect_advance!.executionMode, "sequential");
-		assert.deepEqual(Object.keys(h.commands).sort(), ["architect", "mode", "plan"]);
+		assert.deepEqual(Object.keys(h.commands), ["architect"]);
 		assert.ok(h.shortcuts[SHORTCUT]);
 		assert.ok(h.flags[FLAG]);
 		assert.ok(!h.active().some((n) => n.startsWith("architect_")));
 	});
 
-	it("completes mode names and the architect subcommand", () => {
+	it("completes the architect subcommands, and the plan actions after plan", () => {
 		const h = harness();
-		const modes = h.commands.mode!.getArgumentCompletions!("") as { value: string }[];
+		const complete = (prefix: string) =>
+			h.commands.architect!.getArgumentCompletions!(prefix) as
+				{ value: string; label: string; description: string }[] | null;
+		const all = complete("")!;
 		assert.deepEqual(
-			modes.map((m) => m.value),
-			["architect", "build"],
+			all.map((i) => i.value),
+			["board", "plan", "build", "reset"],
+		);
+		for (const item of all) assert.ok(item.description);
+		assert.deepEqual(
+			complete("b")!.map((i) => i.value),
+			["board", "build"],
 		);
 		assert.deepEqual(
-			(h.commands.mode!.getArgumentCompletions!("b") as { value: string }[]).map((m) => m.value),
-			["build"],
-		);
-		assert.equal(h.commands.mode!.getArgumentCompletions!("x"), null);
-		assert.deepEqual(
-			(h.commands.architect!.getArgumentCompletions!("re") as { value: string }[]).map((m) => m.value),
+			complete("re")!.map((i) => i.value),
 			["reset"],
 		);
-		assert.equal(h.commands.architect!.getArgumentCompletions!("dedupe"), null);
+		assert.deepEqual(
+			complete("plan ")!.map((i) => [i.value, i.label]),
+			[
+				["plan open", "open"],
+				["plan write", "write"],
+				["plan build", "build"],
+			],
+		);
+		assert.deepEqual(
+			complete("plan w")!.map((i) => i.value),
+			["plan write"],
+		);
+		assert.equal(complete("plan here"), null);
+		assert.equal(complete("dedupe"), null);
 	});
 });
 
@@ -96,8 +112,8 @@ describe("modes", () => {
 	it("build mode brings back exactly the tools architect mode turned off", async () => {
 		const h = harness({ ui: new FakeUi(), builtins: ["read", "bash", "write"] });
 		await h.fire("session_start", { reason: "startup" });
-		await h.command("mode", "architect");
-		await h.command("mode", "build");
+		await h.command("architect");
+		await h.command("architect", "build");
 		assert.deepEqual(h.active().sort(), ["bash", "read", "write"]);
 		assert.equal(h.ui!.statuses.get(STATUS_KEY), "▸ build");
 		assert.equal(h.ui!.widgets.get(WIDGET_KEY), undefined);
@@ -107,10 +123,10 @@ describe("modes", () => {
 		const ui = new FakeUi({ confirm: [false, true] });
 		const h = await architecting(ui);
 		await h.call("architect_update", { brief: { goal: "Fewer duplicate alarms" } });
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		assert.equal(rebuild(h.branch).mode, "architect");
 		assert.match(ui.prompts[0]!.detail as string, /The plan is not approved yet\. Switch to build anyway\?/);
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		assert.equal(rebuild(h.branch).mode, "build");
 		assert.ok(ui.done);
 	});
@@ -118,45 +134,68 @@ describe("modes", () => {
 	it("leaves an empty architecture without asking, and resumes at the same phase when coming back", async () => {
 		const ui = new FakeUi().keys([KEYS.enter]);
 		const h = await architecting(ui);
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		assert.equal(ui.prompts.length, 0);
-		await h.command("mode", "architect");
+		await h.command("architect");
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		await h.call("architect_advance", {});
 		ui.script({ confirm: [true] });
-		await h.command("mode", "build");
-		await h.command("mode", "architect");
+		await h.command("architect", "build");
+		await h.command("architect");
 		assert.equal(rebuild(h.branch).architecture!.phase, "explore");
 		assert.equal(ui.statuses.get(STATUS_KEY), "◆ architect · Explore");
 	});
 
-	it("/mode without arguments offers a choice", async () => {
-		const ui = new FakeUi();
-		const h = harness({ ui });
-		await h.fire("session_start", { reason: "startup" });
-		ui.script({ select: ["○ architect: Design a feature first: read-only, phase by phase"] });
-		await h.command("mode");
-		assert.equal(ui.prompts[0]!.title, "Mode (now build)");
-		assert.equal(rebuild(h.branch).mode, "architect");
+	it("/architect in architect mode offers the board, the plan, build mode and reset", async () => {
+		const ui = new FakeUi({ confirm: [true] });
+		const h = await architecting(ui);
+		await h.call("architect_update", { feature: "Dedupe" });
 		ui.script({ select: [undefined] });
-		await h.command("mode");
+		await h.command("architect");
+		assert.equal(ui.prompts[0]!.title, "Architect mode: Dedupe");
+		assert.deepEqual(ui.prompts[0]!.detail, [
+			"Open the board",
+			"Plan: path and actions",
+			"Switch to build mode",
+			"Discard the architecture",
+		]);
+		assert.deepEqual(events(h), ["mode", "update"]);
+		ui.script({ select: ["Switch to build mode"] });
+		await h.command("architect");
+		assert.equal(rebuild(h.branch).mode, "build");
+		await h.command("architect");
 		assert.equal(rebuild(h.branch).mode, "architect");
+		ui.script({ select: ["Discard the architecture"], confirm: [true] });
+		await h.command("architect");
+		assert.deepEqual(events(h), ["mode", "update", "mode", "mode", "reset"]);
 	});
 
-	it("rejects an unknown mode and says when the mode does not change", async () => {
+	it("reserves board, plan, build and reset as the first word, and says when the mode does not change", async () => {
 		const ui = new FakeUi();
 		const h = harness({ ui });
 		await h.fire("session_start", { reason: "startup" });
-		await h.command("mode", "turbo");
-		await h.command("mode", "build");
+		await h.command("architect", "build pipeline");
+		await h.command("architect", "Reset now");
+		await h.command("architect", "build");
 		assert.deepEqual(
 			ui.notifications.map((n) => [n.message, n.type]),
 			[
-				['Unknown mode "turbo". Use /mode architect or /mode build.', "error"],
+				['/architect build takes no arguments. A feature name cannot start with "build".', "error"],
+				['/architect reset takes no arguments. A feature name cannot start with "reset".', "error"],
 				["Already in build mode.", "info"],
 			],
 		);
 		assert.deepEqual(h.entries, []);
+		await h.command("architect", "Builder cleanup");
+		assert.equal(rebuild(h.branch).architecture!.feature, "Builder cleanup");
+	});
+
+	it("headless /architect in architect mode says so instead of a picker", async () => {
+		const h = harness();
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		await h.command("architect");
+		assert.deepEqual(events(h), ["mode"]);
 	});
 
 	it("the shortcut toggles the mode", async () => {
@@ -179,16 +218,16 @@ describe("modes", () => {
 	it("headless sessions switch without asking", async () => {
 		const h = harness();
 		await h.fire("session_start", { reason: "startup" });
-		await h.command("mode", "architect");
+		await h.command("architect");
 		await h.call("architect_update", { brief: { goal: "g" } });
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		assert.equal(rebuild(h.branch).mode, "build");
 	});
 
 	it("RPC clients get the stepper as plain lines", async () => {
 		const h = harness({ ui: new FakeUi(), mode: "rpc" });
 		await h.fire("session_start", { reason: "startup" });
-		await h.command("mode", "architect");
+		await h.command("architect");
 		const widget = h.ui!.widgets.get(WIDGET_KEY);
 		assert.ok(Array.isArray(widget));
 		assert.match(widget[0]!, /◆ ARCHITECT/);
@@ -235,7 +274,7 @@ describe("persistence", () => {
 		await h.fire("session_start", { reason: "resume" });
 		assert.equal(ui.statuses.get(STATUS_KEY), "▸ build · plan approved");
 		assert.deepEqual(ui.widgetLines(WIDGET_KEY), [
-			" ▸ BUILD  plan: dedupe  plan not written · /plan write                                                  ctrl+alt+b board",
+			" ▸ BUILD  plan: dedupe  plan not written · /architect plan write                                        ctrl+alt+b board",
 		]);
 	});
 });
@@ -319,7 +358,7 @@ describe("read-only mode", () => {
 		const h = harness({ ui: new FakeUi() });
 		await h.fire("session_start", { reason: "startup" });
 		assert.equal(await h.toolCall("bash", { command: "rm -rf x" }), undefined);
-		await h.command("mode", "architect");
+		await h.command("architect");
 		const blocked = await h.toolCall("bash", { command: "ls && rm -rf x" });
 		assert.equal(blocked?.block, true);
 		assert.match(blocked!.reason, /rm is not a read-only command/);
@@ -334,7 +373,7 @@ describe("guidance for the model", () => {
 		const h = await architecting();
 		const run = await h.startRun();
 		assert.match(run.sections[SECTION]!, /Phase 1\/6: Frame/);
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		const sections: Record<string, string> = { [SECTION]: "stale" };
 		await h.fire("before_agent_start", { messageType: "user", systemPromptOptions: { sections } });
 		assert.equal(sections[SECTION], undefined);
@@ -346,7 +385,7 @@ describe("guidance for the model", () => {
 		assert.equal(first.message?.customType, MODE_MESSAGE);
 		assert.match(first.message!.content, /switched to architect mode/);
 		assert.equal((await h.startRun()).message, undefined);
-		await h.command("mode", "build");
+		await h.command("architect", "build");
 		assert.match((await h.startRun()).message!.content, /switched to build mode/);
 		assert.equal((await h.startRun("custom")).message, undefined);
 	});

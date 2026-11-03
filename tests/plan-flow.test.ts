@@ -72,7 +72,7 @@ describe("writing the plan on Blueprint approval", () => {
 		assert.equal(final.details?.planPath, planPath);
 		assert.match(
 			final.content[0]!.text,
-			/It is saved at docs\/plans\/dedupe\.md\. Tell the user they can build it with \/plan/,
+			/It is saved at docs\/plans\/dedupe\.md\. Tell the user they can build it with \/architect plan/,
 		);
 		const text = readFileSync(join(h.cwd, planPath), "utf8");
 		assert.match(text, /^---\nfeature: "Dedupe"\nslug: "dedupe"\nstatus: approved\n/);
@@ -92,7 +92,7 @@ describe("writing the plan on Blueprint approval", () => {
 		mkdirSync(join(h.cwd, "docs", "plans"), { recursive: true });
 		writeFileSync(join(h.cwd, planPath), "someone else's plan");
 		await h.fire("session_start", { reason: "resume" });
-		await h.command("plan");
+		await h.command("architect", "plan");
 		assert.equal(readFileSync(join(h.cwd, planPath), "utf8"), "someone else's plan");
 		assert.equal(rebuild(h.branch).plan!.path, join("docs", "plans", "dedupe-2.md"));
 		assert.deepEqual(ui.notifications.at(-1), {
@@ -108,11 +108,11 @@ describe("writing the plan on Blueprint approval", () => {
 			flags: { [PLAN_DIR_FLAG]: " plans " } as never,
 		});
 		await flagged.fire("session_start", { reason: "resume" });
-		await flagged.command("plan", "write");
+		await flagged.command("architect", "plan write");
 		assert.equal(rebuild(flagged.branch).plan!.path, join("plans", "dedupe.md"));
 
 		const h = await approved({ overrides: { planDir: "/tmp/../tmp" } });
-		await h.command("plan", "write");
+		await h.command("architect", "plan write");
 		assert.match(rebuild(h.branch).plan!.path, /^\/(private\/)?tmp\/dedupe(-\d+)?\.md$/);
 		assert.ok(h.flags[PLAN_DIR_FLAG]);
 	});
@@ -128,15 +128,18 @@ describe("writing the plan on Blueprint approval", () => {
 		const final = await h.call("architect_advance", {});
 		assert.equal(final.details?.final, true);
 		assert.equal(final.details?.planPath, undefined);
-		assert.match(final.content[0]!.text, /Writing the plan file failed: .*\. The user can retry with \/plan write\./);
+		assert.match(
+			final.content[0]!.text,
+			/Writing the plan file failed: .*\. The user can retry with \/architect plan write\./,
+		);
 		assert.equal(rebuild(h.branch).plan, undefined);
-		await h.command("plan", "write");
+		await h.command("architect", "plan write");
 		assert.match(h.ui!.notifications.at(-1)!.message, /^Writing the plan file failed: /);
 	});
 
 	it("keeps architect mode read-only after the plan is written, also for the plan file", async () => {
 		const h = await approved();
-		await h.command("plan", "write");
+		await h.command("architect", "plan write");
 		const file = join(h.cwd, planPath);
 		for (const [tool, input] of [
 			["write", { path: file, content: "x" }],
@@ -157,7 +160,7 @@ describe("writing the plan on Blueprint approval", () => {
 				plainTheme,
 			) as { render(w: number): string[] }
 		).render(80);
-		assert.equal(line[0]!.trimEnd(), "▣ plan docs/plans/x.md  /plan to build it");
+		assert.equal(line[0]!.trimEnd(), "▣ plan docs/plans/x.md  /architect plan to build it");
 	});
 });
 
@@ -200,8 +203,8 @@ describe("build mode progress", () => {
 	async function building() {
 		const ui = new FakeUi();
 		const h = await approved({ ui });
-		await h.command("plan", "write");
-		await h.command("mode", "build");
+		await h.command("architect", "plan write");
+		await h.command("architect", "build");
 		return { h, ui, file: join(h.cwd, planPath) };
 	}
 
@@ -267,67 +270,71 @@ describe("build mode progress", () => {
 		rmSync(file);
 		await h.fire("agent_end", {});
 		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
-			" ▸ BUILD  plan: dedupe  ●1   plan file not found · /plan        ctrl+alt+b board",
+			" ▸ BUILD  plan: dedupe  ●1   plan file not found · /architect plan",
 		]);
 
 		const unwritten = await approved();
-		await unwritten.command("mode", "build");
+		await unwritten.command("architect", "build");
 		assert.deepEqual(unwritten.ui!.widgetLines(WIDGET_KEY, 80), [
-			" ▸ BUILD  plan: dedupe  ●1   plan not written · /plan write     ctrl+alt+b board",
+			" ▸ BUILD  plan: dedupe  ●1   plan not written · /architect plan write",
 		]);
 	});
 
 	it("gives RPC clients the progress as plain lines", async () => {
 		const ui = new FakeUi();
 		const h = await approved({ ui, mode: "rpc" });
-		await h.command("plan", "write");
-		await h.command("mode", "build");
+		await h.command("architect", "plan write");
+		await h.command("architect", "build");
 		assert.deepEqual(ui.widgets.get(WIDGET_KEY), [" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key"]);
 	});
 });
 
-describe("/plan", () => {
-	it("completes its actions", () => {
+describe("/architect plan", () => {
+	it("completes its actions after /architect plan", () => {
 		const h = harness();
-		const items = h.commands.plan!.getArgumentCompletions!("") as { value: string }[];
+		const items = h.commands.architect!.getArgumentCompletions!("plan ") as { value: string }[];
 		assert.deepEqual(
 			items.map((i) => i.value),
-			["build", "here", "copy", "open", "path", "write"],
+			["plan open", "plan write", "plan build"],
 		);
-		assert.equal(h.commands.plan!.getArgumentCompletions!("zz"), null);
+		assert.equal(h.commands.architect!.getArgumentCompletions!("plan zz"), null);
 	});
 
 	it("explains that there is no plan, or offers to write an approved one", async () => {
 		const ui = new FakeUi({ confirm: [false] });
 		const none = harness({ ui });
 		await none.fire("session_start", { reason: "startup" });
-		await none.command("plan");
+		await none.command("architect", "plan");
 		assert.match(ui.notifications.at(-1)!.message, /no approved plan in this session/);
 		const h = await approved({ ui });
-		await h.command("plan");
+		await h.command("architect", "plan");
 		assert.equal(rebuild(h.branch).plan, undefined, "declined");
 		const headless = harness({ branch: approvedBranch() });
 		await headless.fire("session_start", { reason: "resume" });
-		await headless.command("plan");
+		await headless.command("architect", "plan");
 		assert.equal(rebuild(headless.branch).plan, undefined);
-		await headless.command("plan", "write");
+		await headless.command("architect", "plan write");
 		assert.equal(rebuild(headless.branch).plan!.path, planPath);
-		await headless.command("plan");
+		await headless.command("architect", "plan");
 	});
 
 	it("rejects an unknown action", async () => {
 		const h = await approved();
-		await h.command("plan", "nope");
-		assert.match(
-			h.ui!.notifications.at(-1)!.message,
-			/Unknown \/plan action "nope"\. Use build, here, copy, open, path, write\./,
-		);
+		for (const action of ["nope", "here", "copy", "path"]) {
+			await h.command("architect", `plan ${action}`);
+			assert.equal(
+				h.ui!.notifications.at(-1)!.message,
+				`Unknown /architect plan action "${action}". Use open, write or build.`,
+			);
+		}
 	});
 
 	it("shows the path and progress, copies and opens", async () => {
 		const copied: string[] = [];
 		const opened: string[] = [];
+		const ui = new FakeUi({ select: ["Copy the path"] });
 		const h = await approved({
+			ui,
 			overrides: {
 				copy: async (text) => {
 					copied.push(text);
@@ -337,22 +344,22 @@ describe("/plan", () => {
 				},
 			},
 		});
-		await h.command("plan", "write");
-		await h.command("plan", "path");
-		assert.equal(h.ui!.notifications.at(-1)!.message, `Plan: ${planPath} · 0/1 slices done`);
-		await h.command("plan", "copy");
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan");
+		assert.equal(ui.prompts.at(-1)!.title, `Plan: ${planPath} · 0/1 slices done`);
 		assert.deepEqual(copied, [planPath]);
-		await h.command("plan", "open");
+		assert.equal(ui.notifications.at(-1)!.message, `Copied ${planPath}`);
+		await h.command("architect", "plan open");
 		assert.deepEqual(opened, [join(h.cwd, planPath)]);
-		await h.command("plan", "write");
+		await h.command("architect", "plan write");
 		assert.equal(h.ui!.notifications.at(-1)!.message, `The plan file is already at ${planPath}.`);
 	});
 
 	it("opens with the system opener and says when that fails", async () => {
 		const h = harness({ ui: new FakeUi(), branch: approvedBranch(), execCode: 1 });
 		await h.fire("session_start", { reason: "resume" });
-		await h.command("plan", "write");
-		await h.command("plan", "open");
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan open");
 		assert.equal(h.execs.length, 1);
 		assert.ok(h.execs[0]!.args.includes(join(h.cwd, planPath)));
 		assert.match(h.ui!.notifications.at(-1)!.message, /^Could not open docs\/plans\/dedupe\.md/);
@@ -362,8 +369,8 @@ describe("/plan", () => {
 		const ui = new FakeUi({ select: ["Copy the path", undefined] });
 		const copied: string[] = [];
 		const h = await approved({ ui, overrides: { copy: async (t) => void copied.push(t) } });
-		await h.command("plan", "write");
-		await h.command("plan");
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan");
 		assert.deepEqual(copied, [planPath]);
 		assert.equal(ui.prompts.at(-1)!.title, `Plan: ${planPath} · 0/1 slices done`);
 		assert.deepEqual(ui.prompts.at(-1)!.detail, [
@@ -372,32 +379,34 @@ describe("/plan", () => {
 			"Copy the path",
 			"Open the file",
 		]);
-		await h.command("plan");
+		await h.command("architect", "plan");
 		assert.ok(ui.done);
 	});
 
 	it("offers to write the file again when it is missing, and refuses to build from nothing", async () => {
 		const ui = new FakeUi();
 		const h = await approved({ ui });
-		await h.command("plan", "write");
+		await h.command("architect", "plan write");
 		const { rmSync } = await import("node:fs");
 		rmSync(join(h.cwd, planPath));
-		for (const action of ["build", "here", "open"]) {
-			await h.command("plan", action);
+		ui.script({ select: ["Build it here, in build mode"] });
+		for (const action of ["build", "", "open"]) {
+			await h.command("architect", `plan ${action}`);
 			assert.equal(
 				ui.notifications.at(-1)!.message,
-				`The plan file ${planPath} is missing. Run /plan write to write it again.`,
+				`The plan file ${planPath} is missing. Run /architect plan write to write it again.`,
 			);
 		}
 		ui.script({ select: ["Write the file again"] });
-		await h.command("plan");
+		await h.command("architect", "plan");
 		assert.equal(readFileSync(join(h.cwd, planPath), "utf8").startsWith("---"), true);
 	});
 
 	it("builds here: switches to build mode and sends the kickoff", async () => {
-		const h = await approved();
-		await h.command("plan", "write");
-		await h.command("plan", "here");
+		const ui = new FakeUi({ select: ["Build it here, in build mode", "Build it here, in build mode"] });
+		const h = await approved({ ui });
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan");
 		assert.equal(rebuild(h.branch).mode, "build");
 		assert.deepEqual(h.userMessages, [
 			{
@@ -406,27 +415,27 @@ describe("/plan", () => {
 			},
 		]);
 		(h.ctx as { isIdle: () => boolean }).isIdle = () => false;
-		await h.command("plan", "here");
+		await h.command("architect", "plan");
 		assert.deepEqual(h.userMessages[1]!.options, { deliverAs: "followUp" });
 	});
 
 	it("does not build here when the user stays in architect mode", async () => {
-		const ui = new FakeUi({ confirm: [false] });
+		const ui = new FakeUi({ select: ["Build it here, in build mode"], confirm: [false] });
 		const h = harness({ ui, branch: [...approvedBranch().slice(0, -1)] });
 		await h.fire("session_start", { reason: "resume" });
 		h.branch.push(entry({ type: "plan", path: planPath, feature: "Dedupe", slug: "dedupe", at: 3 }));
 		mkdirSync(join(h.cwd, "docs", "plans"), { recursive: true });
 		writeFileSync(join(h.cwd, planPath), "## Slices\n\n### 1. a\n\n- [ ] x\n");
 		await h.fire("session_tree", {});
-		await h.command("plan", "here");
+		await h.command("architect", "plan");
 		assert.equal(rebuild(h.branch).mode, "architect");
 		assert.deepEqual(h.userMessages, []);
 	});
 
 	it("hands the plan to a new build session that shows the progress", async () => {
 		const h = await approved();
-		await h.command("plan", "write");
-		await h.command("plan", "build");
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan build");
 		const [opts] = h.newSessions;
 		assert.equal(opts!.parentSession, "/sessions/test.jsonl");
 		const appended: BranchEntry[] = [];
@@ -445,31 +454,31 @@ describe("/plan", () => {
 			" ▸ BUILD  plan: dedupe  ●1   slice 1/1 · Store the key          ctrl+alt+b board",
 		]);
 		assert.match((await next.startRun()).sections[SECTION]!, /docs\/plans\/dedupe\.md/);
-		await next.command("plan", "write");
+		await next.command("architect", "plan write");
 		assert.equal(ui.notifications.at(-1)!.message, `The plan file is already at ${planPath}.`);
 		const { rmSync } = await import("node:fs");
 		rmSync(join(h.cwd, planPath));
-		await next.command("plan", "write");
+		await next.command("architect", "plan write");
 		assert.equal(
 			ui.notifications.at(-1)!.message,
 			"This session cannot write the plan: the design is in another session.",
 		);
-		await next.command("plan", "build");
+		await next.command("architect", "plan build");
 		assert.equal(ui.notifications.at(-1)!.message, `The plan file ${planPath} is missing.`);
 		assert.deepEqual(ui.widgetLines(WIDGET_KEY, 80), [
-			" ▸ BUILD  plan: dedupe  plan file not found · /plan             ctrl+alt+b board",
+			" ▸ BUILD  plan: dedupe  plan file not found · /architect plan   ctrl+alt+b board",
 		]);
 	});
 
 	it("says when the new session was cancelled", async () => {
 		const h = harness({ ui: new FakeUi(), branch: approvedBranch(), cancelNewSession: true });
 		await h.fire("session_start", { reason: "resume" });
-		await h.command("plan", "write");
-		await h.command("plan", "build");
+		await h.command("architect", "plan write");
+		await h.command("architect", "plan build");
 		assert.equal(h.ui!.notifications.at(-1)!.message, "The new session was cancelled.");
 		const headless = harness({ branch: approvedBranch(), cancelNewSession: true });
 		await headless.fire("session_start", { reason: "resume" });
-		await headless.command("plan", "build");
+		await headless.command("architect", "plan build");
 	});
 });
 
