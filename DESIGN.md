@@ -202,7 +202,9 @@ An editor opens at the bottom. ↵ saves the comment, esc cancels.
 
 - A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3 (s3)`.
 - `c` on an item with a comment edits it. Saving it empty or pressing `x` removes it. `m` jumps to the next comment, on any tab. Clicking an item in the bottom edge jumps to it.
-- Closing the board sends every comment to the agent as one user message:
+- Closing the board with comments asks first, in the bottom bar: `Send 2 comments to the agent?  ↵ send  d discard  esc keep editing`.
+  Without comments the board closes at once.
+- Sent comments go to the agent as one user message:
 
   ```
   Board comments:
