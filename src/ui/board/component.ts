@@ -2,6 +2,7 @@ import {
 	Key,
 	matchesKey,
 	stripTerminalSequences,
+	visibleWidth,
 	type Component,
 	type Focusable,
 	type MarkdownTheme,
@@ -265,8 +266,14 @@ export class BoardScreen implements Component, Focusable {
 		return wrapAfter([sp("✎ ", "warning")], comment.text, width, "text");
 	}
 
-	/** The body of the current tab at `inner` columns: its lines, which item each belongs to, and the item ranges. */
-	private body(inner: number): { lines: Line[]; owners: number[]; ranges: { start: number; end: number }[] } {
+	/**
+	 * The body of the current tab: its lines, which item each belongs to, and the item ranges. Text sits in
+	 * the centered `column`; a diagram's detail view grows up to `inner` columns when the drawing needs it.
+	 */
+	private body(
+		inner: number,
+		column: number,
+	): { lines: Line[]; owners: number[]; ranges: { start: number; end: number }[] } {
 		const lines: Line[] = [];
 		const owners: number[] = [];
 		const ranges: { start: number; end: number }[] = [];
@@ -281,7 +288,7 @@ export class BoardScreen implements Component, Focusable {
 		if (detail) {
 			const index = items.findIndex((i) => i.key === detail.key);
 			const item = items[index]!;
-			push(
+			const head: Line[] = [
 				[
 					sp("◂ ", "accent"),
 					sp("Diagrams", "muted"),
@@ -290,18 +297,21 @@ export class BoardScreen implements Component, Focusable {
 					sp("  "),
 					sp(item.label ?? "", "text", true),
 				],
-				-1,
-			);
-			push([], -1);
+				[],
+			];
+			const drawing = Math.max(...item.diagram!.body.split("\n").map((l) => visibleWidth(l)));
+			const width = Math.min(inner, Math.max(column, drawing));
+			const left: Span[] = [sp(" ".repeat(Math.floor((inner - width) / 2)))];
+			for (const line of head) push([...left, ...line], -1);
 			ranges[index] = { start: lines.length, end: lines.length };
-			for (const line of detail.view.render(inner)) push([raw(line, stripTerminalSequences(line))], index);
-			const notes = this.commentLines(item.key, inner);
+			for (const line of detail.view.render(width)) push([...left, raw(line, stripTerminalSequences(line))], index);
+			const notes = this.commentLines(item.key, width);
 			if (notes.length) push([], index);
-			for (const line of notes) push(line, index);
+			for (const line of notes) push([...left, ...line], index);
 			ranges[index]!.end = lines.length;
 			return { lines, owners, ranges };
 		}
-		const width = this.tab === "diagrams" ? inner : Math.min(inner, MAX_TEXT);
+		const width = column;
 		const left: Span[] = width < inner ? [sp(" ".repeat(Math.floor((inner - width) / 2)))] : [];
 		const text = Math.max(1, width - GUTTER);
 		if (!items.length) {
@@ -397,6 +407,10 @@ export class BoardScreen implements Component, Focusable {
 		const inner = innerWidth(total, padX);
 		const arch = this.data.arch;
 		const row = (line: Line, side?: Span) => boxRow(line, total, "round", "border", padX, side);
+		// Wide terminals center a reading column; the tab bar, the hints and the editor line up with it.
+		const column = Math.min(inner, MAX_TEXT);
+		const lead = Math.floor((inner - column) / 2);
+		const centered = (line: Line, side?: Span) => row(lead ? [sp(" ".repeat(lead)), ...line] : line, side);
 
 		// Top: title, phases, tabs and the rule under them.
 		const title: Line = [sp("◆", "accent", true), sp(" Board", "accent", true)];
@@ -416,22 +430,23 @@ export class BoardScreen implements Component, Focusable {
 					: arch.status === "review"
 						? [sp("◉ awaiting your review", "warning")]
 						: [];
-			const room = inner - (status.length ? lineWidth(status) + 3 : 0);
+			const room = column - (status.length ? lineWidth(status) + 3 : 0);
 			const plainSteps = renderSteps(arch, room, { fg: (_c, t) => t, bold: (t) => t });
 			const steps: Line = [raw(renderSteps(arch, room, this.paint), plainSteps)];
-			const space = inner - lineWidth(steps) - lineWidth(status);
-			top.push(row(status.length && space >= 3 ? [...steps, sp(" ".repeat(space)), ...status] : steps));
+			const space = column - lineWidth(steps) - lineWidth(status);
+			top.push(centered(status.length && space >= 3 ? [...steps, sp(" ".repeat(space)), ...status] : steps));
 		}
 		const summaries = Object.fromEntries(TABS.map((t) => [t, summarize(this.data, t)])) as Parameters<typeof tabBar>[0];
 		const perTab: Partial<Record<BoardTab, number>> = {};
 		for (const c of this.comments.values()) perTab[c.tab] = (perTab[c.tab] ?? 0) + 1;
-		const bar = tabBar(summaries, this.tab, perTab, inner);
+		const bar = tabBar(summaries, this.tab, perTab, column);
 		const tabRow = top.length;
-		top.push(row(bar.line));
+		const tabOffset = 1 + padX + lead;
+		top.push(centered(bar.line));
 		top.push(
 			tabRule(
 				total,
-				1 + padX,
+				tabOffset,
 				bar.ranges.find((r) => r.tab === this.tab),
 			),
 		);
@@ -446,9 +461,9 @@ export class BoardScreen implements Component, Focusable {
 					...(editor.item.label ? [sp(`  ${editor.item.label}`, "muted")] : []),
 				])
 			: [sp(`├${"─".repeat(Math.max(0, total - 2))}┤`, "border")];
-		let written = editor ? editor.editor.lines(inner).map((l) => row(l)) : [];
+		let written = editor ? editor.editor.lines(column).map((l) => centered(l)) : [];
 		const room = () => height - top.length - 1 - written.length - 1;
-		let keys = this.hints(inner, room() - MIN_BODY >= 7 ? 2 : 1).map((l) => row(l));
+		let keys = this.hints(column, room() - MIN_BODY >= 7 ? 2 : 1).map((l) => centered(l));
 		// On a short terminal the body keeps a few rows: the rule goes first, then while writing the hints
 		// and the editor's first lines, so the line with the cursor stays in view.
 		let ruled = room() - keys.length >= MIN_BODY || editor !== undefined;
@@ -457,7 +472,7 @@ export class BoardScreen implements Component, Focusable {
 		if (!editor && room() - keys.length < MIN_BODY) ruled = false;
 		const foot: Line[] = [...(ruled ? [rule] : []), ...written, ...keys];
 
-		const body = this.body(inner);
+		const body = this.body(inner, column);
 		const viewport = Math.max(1, height - top.length - foot.length - 1);
 		const maxScroll = Math.max(0, body.lines.length - viewport);
 		let scroll = this.detail ? this.detail.scroll : (this.scrolls.get(this.tab) ?? 0);
@@ -507,7 +522,7 @@ export class BoardScreen implements Component, Focusable {
 			height,
 			lines,
 			tabRow,
-			tabOffset: 1 + padX,
+			tabOffset,
 			tabRanges: bar.ranges,
 			bodyTop: top.length,
 			viewport,
