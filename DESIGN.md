@@ -88,24 +88,51 @@ On narrow terminals the line cuts the title, then drops the plan name, the title
 
 ## The decision card
 
-The model gives 2 to 4 options with pros, cons, effort, risk and one recommendation.
+The model gives 2 to 4 options with pros, cons, effort, risk and one recommendation with a reason.
 
 ```
-╭─ Decision 3/5 · Where do panel events get deduplicated? ─────────────────╮
-│                                                                          │
-│  ┌ A  In processor ★ ┐  ┌ B  In backend ───┐  ┌ C  Redis stream ──┐      │
-│  │ effort ▰▰▱▱▱      │  │ effort ▰▰▰▱▱     │  │ effort ▰▰▰▰▱      │      │
-│  │ risk   ▰▱▱▱▱      │  │ risk   ▰▰▱▱▱     │  │ risk   ▰▰▰▱▱      │      │
-│  │ + one owner       │  │ + has DB context │  │ + scales out      │      │
-│  │ − state per node  │  │ − later dedup    │  │ − new infra       │      │
-│  └───────────────────┘  └──────────────────┘  └───────────────────┘      │
-│                                                                          │
-│  ↵ choose   c comment   e edit option   n new option   ? ask why   esc   │
-╰──────────────────────────────────────────────────────────────────────────╯
+╭─ ◆ Decision 3/5 ─────────────────────────────────────────────── dedupe-panel-events ─╮
+│                                                                                      │
+│  Where do panel events get deduplicated?                                             │
+│  Panels resend every event during a failover.                                        │
+│                                                                                      │
+│  ┏━ A  In processor ★ ━━━━┓  ┌─ B  In backend ────────┐  ┌─ C  Redis stream ──────┐  │
+│  ┃ effort ▰▰▱▱▱           ┃  │ effort ▰▰▰▱▱           │  │ effort ▰▰▰▰▱           │  │
+│  ┃ risk   ▰▱▱▱▱           ┃  │ risk   ▰▰▱▱▱           │  │ risk   ▰▰▰▱▱           │  │
+│  ┃ + one owner            ┃  │ + has DB context       │  │ + scales out           │  │
+│  ┃ − state per node       ┃  │ − later dedup          │  │ − new infra            │  │
+│  ┗━━━━━━━━━━━━━━━━━━━━━━━━┛  └────────────────────────┘  └────────────────────────┘  │
+│                                                                                      │
+│  ★ Agent recommends A  In processor                                                  │
+│    One owner, no new infra.                                                          │
+│                                                                                      │
+│  ↵ choose  c choose with comment  n own option  ? ask  ←→ move  esc close            │
+╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-←/→ moves between options. The choice and any comment go back to the model as the tool result.
-"Pick B, but only for alarms" is a valid answer.
+- ←/→, tab and 1–4 move between options. Focus starts on the recommendation. ↵ chooses.
+- `c` chooses with a comment, `n` writes an own option, `?` asks a question instead. Each opens an editor inside the card.
+- Four options sit two by two when a row does not fit. On narrow or short terminals the options fold into a list with the focused one open.
+- The choice and any comment go back to the model as the tool result. "Pick B, but only for alarms" is a valid answer.
+  An own option is recorded as a new option and chosen. A question goes back to the model, which answers and asks again with the same id.
+- Decision ids are `q1`, `q2` and so on. Diagrams use `d1`.
+
+## Phase Review screens
+
+`architect_advance` opens a review screen for the phase: a frame with the agent's summary, the phase and the verdict keys.
+
+| Phase     | The screen shows                                                      |
+| --------- | --------------------------------------------------------------------- |
+| Frame     | The brief: goal, constraints beside out of scope, done-when           |
+| Explore   | The module map as a tree, with touched, new and context markers       |
+| Decide    | Each decision with the choice and comment. Rejected options are dim   |
+| Design    | The diagrams, drawn by the diagram renderer                           |
+| Slice     | The slices in build order, with arrows, files, steps and verify       |
+| Blueprint | Everything on one page, and the path the plan file will be written to |
+
+Long screens scroll with ↑/↓, PgUp/PgDn, Home and End. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, esc closes.
+
+The card and the screens are inline, in place of the editor. The transcript stays in view, and terminals that support it show Pi as waiting for the user. RPC clients get simple select dialogs instead.
 
 ## Diagrams
 
