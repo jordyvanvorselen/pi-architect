@@ -9,7 +9,7 @@ import { DEFAULT_PLAN_DIR, displayPath, planFile, readPlan, writePlan } from "./
 import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, SECTION } from "./prompt.ts";
 import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
 import type { DecisionUi } from "./decision.ts";
-import { selectReview, type ReviewUi } from "./review.ts";
+import type { ReviewUi } from "./review.ts";
 import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state/events.ts";
 import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
@@ -21,6 +21,7 @@ import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
 import { decisionCard } from "./ui/decision/index.ts";
 import type { Paint } from "./ui/paint.ts";
+import { phaseReview } from "./ui/review/index.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
 import { renderBuildProgress, type BuildView } from "./ui/progress.ts";
 import { sliceCall, sliceResult } from "./ui/slice.ts";
@@ -61,7 +62,7 @@ const textOf = (result: { content: { type: string; text?: string }[] }) =>
 
 export default function architectExtension(pi: ExtensionAPI, overrides: ArchitectOverrides = {}): void {
 	const now = overrides.now ?? Date.now;
-	const review = overrides.review ?? selectReview;
+	const review = overrides.review ?? phaseReview;
 	let state: ArchitectState = INITIAL_STATE;
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
@@ -178,6 +179,13 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		return overrides.planDir ?? (typeof flag === "string" && flag.trim() ? flag.trim() : DEFAULT_PLAN_DIR);
 	}
 
+	/** Where approving the Blueprint writes the plan file. A taken name gets a number when it is written. */
+	function planTarget(ctx: ExtensionContext): string | undefined {
+		const arch = state.architecture;
+		if (!arch) return undefined;
+		return displayPath(ctx.cwd, planFile(ctx.cwd, `${planDir()}/${arch.slug || slugify(arch.feature)}.md`));
+	}
+
 	/** Write the approved plan to a new file and record where. Never overwrites a file. */
 	async function writePlanFile(ctx: ExtensionContext): Promise<Finalized> {
 		const arch = state.architecture;
@@ -283,7 +291,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		executionMode: "sequential",
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			ctxRef = ctx;
-			return advance({ state: () => state, append, review, now, has, finalize: writePlanFile }, params, signal, ctx);
+			return advance(
+				{ state: () => state, append, review, now, has, finalize: writePlanFile, planTarget },
+				params,
+				signal,
+				ctx,
+			);
 		},
 		renderCall(args, theme, context) {
 			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);

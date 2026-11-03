@@ -43,6 +43,8 @@ export interface AdvanceDeps {
 	has: ToolCheck;
 	/** Writes the plan file once the Blueprint is approved. */
 	finalize?(ctx: ExtensionContext): Promise<Finalized>;
+	/** Where approving the Blueprint will write the plan file, for the review screen. */
+	planTarget?(ctx: ExtensionContext): string | undefined;
 }
 
 export interface AdvanceResult {
@@ -93,10 +95,17 @@ export async function advance(
 		);
 
 	const summary = params.summary?.trim();
+	const planPath = phase === "blueprint" ? deps.planTarget?.(ctx) : undefined;
 	deps.append({ type: "submit", phase, at: deps.now(), ...(summary ? { summary } : {}) });
 	const answer = await deps
 		.review(
-			{ arch: deps.state().architecture!, phase, ...(summary ? { summary } : {}), ...(signal ? { signal } : {}) },
+			{
+				arch: deps.state().architecture!,
+				phase,
+				...(summary ? { summary } : {}),
+				...(signal ? { signal } : {}),
+				...(planPath ? { planPath } : {}),
+			},
 			ctx,
 		)
 		.catch((error: unknown) => {

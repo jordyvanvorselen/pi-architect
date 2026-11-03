@@ -7,7 +7,7 @@ import { MODE_MESSAGE, SECTION } from "../src/prompt.ts";
 import { rebuild } from "../src/state/reducer.ts";
 import { STATUS_KEY } from "../src/ui/status.ts";
 import { harness } from "./harness.ts";
-import { assertComponentFits, FakeUi, plainTheme } from "./helpers.ts";
+import { assertComponentFits, FakeUi, KEYS, plainTheme, type } from "./helpers.ts";
 
 const events = (h: ReturnType<typeof harness>) => h.entries.map((e) => e.data.type);
 
@@ -116,7 +116,7 @@ describe("modes", () => {
 	});
 
 	it("leaves an empty architecture without asking, and resumes at the same phase when coming back", async () => {
-		const ui = new FakeUi({ select: ["Approve Frame"] });
+		const ui = new FakeUi().keys([KEYS.enter]);
 		const h = await architecting(ui);
 		await h.command("mode", "build");
 		assert.equal(ui.prompts.length, 0);
@@ -403,18 +403,22 @@ describe("architect_advance", () => {
 	});
 
 	it("approval moves on and hands the model the next phase's guidance", async () => {
-		const ui = new FakeUi({ select: ["Approve Frame"] });
+		const ui = new FakeUi().keys([KEYS.enter]);
 		const h = await architecting(ui);
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		const result = await h.call("architect_advance", { summary: "Check the scope" });
 		assert.match(result.content[0]!.text, /^Frame approved\. Now in Explore \(phase 2\/6\):\n- Read the code/);
-		assert.match(ui.prompts[0]!.title, /^Review Frame: Check the scope\n\nFeature: Dedupe\nGoal: g/);
+		const screen = ui.customs[0]!.frames[0]!.join("\n");
+		assert.match(screen, /◆ Review Frame 1\/6/);
+		assert.match(screen, /▍ Check the scope/);
+		assert.match(screen, /GOAL\s+│\n│\s+g\s/);
+		assert.deepEqual(ui.customs[0]!.options, { blocked: { kind: "question", message: "Review Frame" } });
 		assert.deepEqual(events(h).slice(-2), ["submit", "verdict"]);
 		assert.equal(ui.statuses.get(STATUS_KEY), "◆ architect · Explore");
 	});
 
 	it("requested changes return the user's comment", async () => {
-		const ui = new FakeUi({ select: ["Request changes"], input: ["  tighten the scope "] });
+		const ui = new FakeUi().keys(["r", ...type("  tighten the scope "), KEYS.enter]);
 		const h = await architecting(ui);
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		const result = await h.call("architect_advance", {});
@@ -426,7 +430,7 @@ describe("architect_advance", () => {
 	});
 
 	it("a closed review stops the agent and puts the phase back to working", async () => {
-		const ui = new FakeUi({ select: [undefined] });
+		const ui = new FakeUi().keys([KEYS.escape]);
 		const h = await architecting(ui);
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		const result = await h.call("architect_advance", {});
@@ -529,7 +533,7 @@ describe("architect_advance", () => {
 	});
 
 	it("renders a waiting state and the outcome", async () => {
-		const ui = new FakeUi({ select: ["Approve Frame"] });
+		const ui = new FakeUi().keys([KEYS.enter]);
 		const h = await architecting(ui);
 		const tool = h.tools.architect_advance!;
 		const ctx = { lastComponent: undefined, isError: false };

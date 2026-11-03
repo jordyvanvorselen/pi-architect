@@ -10,6 +10,8 @@ export interface ReviewRequest {
 	summary?: string;
 	/** Aborts when the user interrupts the agent. Close the review screen when it fires. */
 	signal?: AbortSignal;
+	/** Blueprint: where approving writes the plan file, as the user should read it. */
+	planPath?: string;
 }
 
 export type ReviewAnswer = { verdict: "approved"; comment?: string } | { verdict: "changes"; comment: string };
