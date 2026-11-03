@@ -98,8 +98,11 @@ describe("renderPlan", () => {
 		assert.match(md, /^# Feature$/m);
 		assert.match(md, /### Goal\n\nNot set\.\n\n### Constraints\n\nNone\./);
 		assert.match(md, /### Modules\n\nNone\./);
-		assert.doesNotMatch(md, /### Current shape/);
-		assert.match(md, /### 1\. Which one\?\n\n\*\*Open\.\*\* This question was not decided/);
+		assert.doesNotMatch(md, /### How it works today/);
+		assert.match(
+			md,
+			/### 1\. Which one\?\n\n\*\*Open\.\*\* Nobody decided this\. Ask the user before you build anything that depends on it\./,
+		);
 		assert.match(md, /## Design\n\nNo diagrams\./);
 		assert.match(md, /## Risks\n\nNone known\./);
 		assert.match(
@@ -115,6 +118,25 @@ describe("renderPlan", () => {
 		assert.match(renderPlan({ ...newArchitecture(1, "", "only-slug") }), /^feature: "only-slug"$/m);
 	});
 
+	it("reads plainly for a builder with no other context", async () => {
+		const md = await readFile(SNAPSHOT, "utf8");
+		assert.doesNotMatch(md, /[—–]/, "no em or en dashes");
+		assert.match(md, /If a decision cannot work, stop and ask the user\./);
+		assert.match(md, /- `src\/api\/alarms` \(read only, do not change\)/);
+		assert.match(
+			md,
+			/\*\*A\. Forever\*\* \(recommended, but not chosen\)/,
+			"a rejected recommendation is not mistaken for the choice",
+		);
+		assert.match(
+			md,
+			/Why not: Duplicates still fill the table\. Every reader must filter\.$/m,
+			"reasons are sentences",
+		);
+		assert.match(md, /The user added this to the choice\. Follow it:\n\n> /);
+		assert.match(md, /## Design\n\nIn the diagrams, `\[new\]`, `\[changed\]` and `\[removed\]` mark/);
+	});
+
 	it("explains rejected options without cons, and options without pros or cons", () => {
 		const arch = fullArchitecture();
 		arch.decisions[0]!.options[2]!.cons = [];
@@ -122,7 +144,10 @@ describe("renderPlan", () => {
 		arch.decisions[0]!.options[0]!.cons = [];
 		const md = renderPlan(arch);
 		assert.match(md, /- \*\*C\. Redis stream\*\*: Not chosen\.$/m);
-		assert.match(md, /\*\*Chosen: A\. In the processor\*\* \(recommended\)\n\nSkip an event[^\n]*\n\nEffort 2\/5/);
+		assert.match(
+			md,
+			/\*\*Chosen: A\. In the processor\*\* \(recommended\)\n\nSkip an event[^\n]*\n\nEstimated effort 2\/5/,
+		);
 	});
 });
 
@@ -236,7 +261,7 @@ describe("parsePlanProgress", () => {
 			progress.map((s) => [s.number, s.title, s.total, s.checked]),
 			[
 				[1, "Add the dedup key column", 3, 0],
-				[2, "Store dedup key", 4, 0],
+				[2, "Build the dedup key", 4, 0],
 				[3, "Show skipped duplicates in the debug log", 2, 0],
 				[4, "Skip duplicates on insert", 4, 0],
 			],

@@ -43,6 +43,12 @@ function emphasis(text: string): string {
 /** One line: no line breaks, single spaces. */
 const flat = (text: string) => text.replace(/\s+/g, " ").trim();
 
+/** One line of prose that ends like a sentence, so several can follow each other. */
+const sentence = (text: string) => {
+	const line = inline(text);
+	return /[.!?]$/.test(line) ? line : `${line}.`;
+};
+
 /** One line of prose, with emphasis as prettier writes it. */
 function inline(text: string): string {
 	return outsideCode(flat(text), emphasis);
@@ -83,7 +89,7 @@ const list = (items: readonly string[], empty = "None.") =>
 
 const yaml = (value: string) => JSON.stringify(value);
 
-const ROLE: Record<ModuleRole, string> = { touched: "changes", new: "new", context: "read only" };
+const ROLE: Record<ModuleRole, string> = { touched: "to change", new: "new", context: "read only, do not change" };
 const SEVERITY: Record<Severity, string> = { high: "High", medium: "Medium", low: "Low" };
 
 function frontMatter(bp: Blueprint, options: RenderOptions): string {
@@ -107,9 +113,9 @@ const HOW_TO = [
 		"1. Read the whole plan before you change any code.",
 		"2. Build the slices in order. Start a slice only when every slice it depends on is done.",
 		"3. Follow the steps of the slice. Tick each step in this file, from `- [ ]` to `- [x]`, as soon as it is done.",
-		'4. Run every verify command of the slice. Fix the code until they all pass. Then tick "Verified" and move on.',
-		"5. The decisions are final. Do not reopen them or build a rejected option. If one cannot work, stop and ask the user.",
-		"6. Stay inside the brief. Leave everything out of scope alone. Follow the existing patterns under Context.",
+		'4. Run every command in the "Verify" block of the slice. Fix the code until they all pass. Then tick "Verified" and move on.',
+		"5. The decisions are final. Do not reopen them or build a rejected option. If a decision cannot work, stop and ask the user.",
+		'6. Stay inside the brief. Do not touch anything under "Out of scope". Follow the existing patterns under Context.',
 	].join("\n"),
 ];
 
@@ -143,7 +149,9 @@ function context(bp: Blueprint): string[] {
 		modules.length ? modules.join("\n") : "None.",
 		"### Findings and existing patterns",
 		list(bp.findings.map((f) => f.text)),
-		...(bp.currentShape.length ? ["### Current shape", ...bp.currentShape.flatMap((d) => diagram(d, "####"))] : []),
+		...(bp.currentShape.length
+			? ["### How it works today", ...bp.currentShape.flatMap((d) => diagram(d, "####"))]
+			: []),
 	];
 }
 
@@ -154,24 +162,25 @@ function option(o: BlueprintOption): string[] {
 		...(o.summary ? [prose(o.summary)] : []),
 		[...o.pros.map((p) => `- Pro: ${inline(p)}`), ...o.cons.map((c) => `- Con: ${inline(c)}`)].join("\n"),
 		o.rating
-			? `Effort ${o.rating.effort}/5, risk ${o.rating.risk}/5.`
+			? `Estimated effort ${o.rating.effort}/5, risk ${o.rating.risk}/5.`
 			: "The user wrote this option. Nobody rated its effort or risk.",
 	].filter(Boolean);
 }
 
 function decision(d: BlueprintDecision, index: number): string[] {
 	const head = [`### ${index + 1}. ${inline(d.question)}`, ...(d.context ? [prose(d.context)] : [])];
-	if (!d.chosen) return [...head, "**Open.** This question was not decided. Ask the user before you build it."];
+	if (!d.chosen)
+		return [...head, "**Open.** Nobody decided this. Ask the user before you build anything that depends on it."];
 	const rejected = d.rejected.map(({ option: o, recommended }) => {
-		const why = o.cons.length ? `Not chosen: ${o.cons.map(inline).join("; ")}.` : "Not chosen.";
-		const summary = o.summary ? ` ${inline(o.summary)}` : "";
-		return `- **${optionName(o)}**${recommended ? " (recommended)" : ""}:${summary} ${why}`;
+		const why = o.cons.length ? `Why not: ${o.cons.map(sentence).join(" ")}` : "Not chosen.";
+		const summary = o.summary ? ` ${sentence(o.summary)}` : "";
+		return `- **${optionName(o)}**${recommended ? " (recommended, but not chosen)" : ""}:${summary} ${why}`;
 	});
 	return [
 		...head,
 		`**Chosen: ${optionName(d.chosen)}**${d.followedRecommendation ? " (recommended)" : ""}`,
 		...option(d.chosen),
-		...(d.comment ? ["The user said:", `> ${inline(d.comment)}`] : []),
+		...(d.comment ? ["The user added this to the choice. Follow it:", `> ${inline(d.comment)}`] : []),
 		...(rejected.length ? ["Rejected:", rejected.join("\n")] : []),
 	];
 }
@@ -187,7 +196,12 @@ function decisions(bp: Blueprint): string[] {
 }
 
 function design(bp: Blueprint): string[] {
-	return ["## Design", ...(bp.design.length ? bp.design.flatMap((d) => diagram(d, "###")) : ["No diagrams."])];
+	if (!bp.design.length) return ["## Design", "No diagrams."];
+	return [
+		"## Design",
+		"In the diagrams, `[new]`, `[changed]` and `[removed]` mark what this plan adds, changes or removes.",
+		...bp.design.flatMap((d) => diagram(d, "###")),
+	];
 }
 
 function risks(bp: Blueprint): string[] {

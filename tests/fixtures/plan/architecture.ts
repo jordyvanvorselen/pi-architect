@@ -40,7 +40,7 @@ export function fullArchitecture(): Architecture {
 				path: "src/ingest/dedup",
 				role: "new",
 				files: ["src/ingest/dedup/key.ts"],
-				note: "Builds the dedup key from panel id, event code and the panel's own timestamp.",
+				note: "Builds the dedup key from the panel id, the sequence number and the UTC date.",
 			},
 			{ path: "migrations", role: "touched", files: [], note: "Plain SQL files, applied in name order." },
 		],
@@ -160,7 +160,7 @@ export function fullArchitecture(): Architecture {
 			{
 				id: "s1",
 				title: "Add the dedup key column",
-				goal: "`panel_events` has a `dedup_key` column with a unique index per day.",
+				goal: "`panel_events` has a `dedup_key` column with a unique index.",
 				dependsOn: [],
 				files: ["migrations/0042_panel_events_dedup_key.sql"],
 				steps: [
@@ -171,7 +171,7 @@ export function fullArchitecture(): Architecture {
 			},
 			{
 				id: "s2",
-				title: "Store dedup key",
+				title: "Build the dedup key",
 				goal: "Every new event carries a dedup key built from panel id, sequence and UTC date.",
 				dependsOn: ["s1"],
 				files: ["src/ingest/dedup/key.ts", "src/ingest/schema.ts", "tests/ingest/key.test.ts"],

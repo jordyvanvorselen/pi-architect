@@ -17,9 +17,9 @@ This plan was designed with the user and approved. It holds everything you need 
 1. Read the whole plan before you change any code.
 2. Build the slices in order. Start a slice only when every slice it depends on is done.
 3. Follow the steps of the slice. Tick each step in this file, from `- [ ]` to `- [x]`, as soon as it is done.
-4. Run every verify command of the slice. Fix the code until they all pass. Then tick "Verified" and move on.
-5. The decisions are final. Do not reopen them or build a rejected option. If one cannot work, stop and ask the user.
-6. Stay inside the brief. Leave everything out of scope alone. Follow the existing patterns under Context.
+4. Run every command in the "Verify" block of the slice. Fix the code until they all pass. Then tick "Verified" and move on.
+5. The decisions are final. Do not reopen them or build a rejected option. If a decision cannot work, stop and ask the user.
+6. Stay inside the brief. Do not touch anything under "Out of scope". Follow the existing patterns under Context.
 
 ## Brief
 
@@ -47,13 +47,13 @@ Panels send the same alarm event up to five times when the network flaps. Store 
 
 ### Modules
 
-- `src/ingest` (changes): Parses panel messages and writes them with `insertEvent`.
+- `src/ingest` (to change): Parses panel messages and writes them with `insertEvent`.
   - `src/ingest/processor.ts`
   - `src/ingest/schema.ts`
-- `migrations` (changes): Plain SQL files, applied in name order.
-- `src/ingest/dedup` (new): Builds the dedup key from panel id, event code and the panel's own timestamp.
+- `migrations` (to change): Plain SQL files, applied in name order.
+- `src/ingest/dedup` (new): Builds the dedup key from the panel id, the sequence number and the UTC date.
   - `src/ingest/dedup/key.ts`
-- `src/api/alarms` (read only): Reads `panel_events`.
+- `src/api/alarms` (read only, do not change): Reads `panel_events`.
   - `src/api/alarms/list.ts`
 
 ### Findings and existing patterns
@@ -62,7 +62,7 @@ Panels send the same alarm event up to five times when the network flaps. Store 
 - `insertEvent` in src/ingest/processor.ts is the only place that writes `panel_events`.
 - Tests use the `withDb` helper from tests/db.ts, which runs each test in a rolled back transaction.
 
-### Current shape
+### How it works today
 
 #### Ingest today
 
@@ -90,16 +90,16 @@ Skip an event whose dedup key is already stored.
 - Pro: Duplicates never reach the database
 - Con: Needs a unique index to be safe under concurrency
 
-Effort 2/5, risk 1/5.
+Estimated effort 2/5, risk 1/5.
 
-The user said:
+The user added this to the choice. Follow it:
 
 > Yes, and log every skipped duplicate at debug level.
 
 Rejected:
 
-- **B. In the backend**: Filter duplicates when the alarm list is read. Not chosen: Duplicates still fill the table; Every reader must filter.
-- **C. Redis stream**: Not chosen: New infrastructure, which the brief rules out.
+- **B. In the backend**: Filter duplicates when the alarm list is read. Why not: Duplicates still fill the table. Every reader must filter.
+- **C. Redis stream**: Why not: New infrastructure, which the brief rules out.
 
 ### 2. How long do dedup keys stay unique?
 
@@ -110,13 +110,15 @@ The key includes the event's UTC date.
 - Pro: A sequence reset only matters within one day
 - Con: Slightly longer key
 
-Effort 2/5, risk 1/5.
+Estimated effort 2/5, risk 1/5.
 
 Rejected:
 
-- **A. Forever** (recommended): A unique index on the key column. Not chosen: A panel that resets its sequence loses events.
+- **A. Forever** (recommended, but not chosen): A unique index on the key column. Why not: A panel that resets its sequence loses events.
 
 ## Design
+
+In the diagrams, `[new]`, `[changed]` and `[removed]` mark what this plan adds, changes or removes.
 
 ### Ingest with dedup
 
@@ -158,7 +160,7 @@ Build order: 1, then 2 and 3 in any order, then 4.
 
 ### 1. Add the dedup key column
 
-**Goal:** `panel_events` has a `dedup_key` column with a unique index per day.
+**Goal:** `panel_events` has a `dedup_key` column with a unique index.
 
 **Depends on:** nothing
 
@@ -180,7 +182,7 @@ npm test -- tests/migrations.test.ts
 
 - [ ] Verified: every command above passes.
 
-### 2. Store dedup key
+### 2. Build the dedup key
 
 **Goal:** Every new event carries a dedup key built from panel id, sequence and UTC date.
 
@@ -232,7 +234,7 @@ npm test -- tests/ingest/log.test.ts
 
 **Goal:** `insertEvent` stores each event once and skips retries.
 
-**Depends on:** 2. Store dedup key, 3. Show skipped duplicates in the debug log
+**Depends on:** 2. Build the dedup key, 3. Show skipped duplicates in the debug log
 
 **Files:**
 
