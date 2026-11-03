@@ -72,7 +72,7 @@ export function fullArchitecture(): Architecture {
 		],
 		decisions: [
 			{
-				id: "d1",
+				id: "q1",
 				question: "Where do panel events get deduplicated?",
 				context: "Events arrive at the processor, which writes them to Postgres. The backend only reads them.",
 				options: [
@@ -108,7 +108,7 @@ export function fullArchitecture(): Architecture {
 				comment: "Yes, and log every skipped duplicate at debug level.",
 			},
 			{
-				id: "d2",
+				id: "q2",
 				question: "How long do dedup keys stay unique?",
 				options: [
 					{

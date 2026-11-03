@@ -31,7 +31,13 @@ async function architecting(ui = new FakeUi()) {
 describe("registration", () => {
 	it("registers the architect tools inactive, with prompt text that names each tool", () => {
 		const h = harness();
-		for (const name of ["architect_update", "architect_advance", "architect_diagram", "architect_slice"]) {
+		for (const name of [
+			"architect_update",
+			"architect_advance",
+			"architect_decide",
+			"architect_diagram",
+			"architect_slice",
+		]) {
 			const tool = h.tools[name]!;
 			assert.equal(tool.defaultActive, false);
 			assert.ok(tool.promptSnippet);
