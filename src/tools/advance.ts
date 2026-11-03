@@ -28,7 +28,12 @@ export interface AdvanceDetails {
 	missing?: string[];
 	/** True when approving this phase made the plan final. */
 	final?: boolean;
+	/** Where the plan file was written, when it was. */
+	planPath?: string;
 }
+
+/** What writing the plan file gave: the path, or why it failed. */
+export type Finalized = { path: string } | { error: string };
 
 export interface AdvanceDeps {
 	state(): ArchitectState;
@@ -36,6 +41,8 @@ export interface AdvanceDeps {
 	review: ReviewUi;
 	now(): number;
 	has: ToolCheck;
+	/** Writes the plan file once the Blueprint is approved. */
+	finalize?(ctx: ExtensionContext): Promise<Finalized>;
 }
 
 export interface AdvanceResult {
@@ -119,11 +126,24 @@ export async function advance(
 
 	const next = nextPhase(phase);
 	const note = comment ? ` The user added: "${comment}".` : "";
-	if (!next)
+	if (!next) {
+		const written = deps.finalize ? await deps.finalize(ctx) : undefined;
+		const where = !written
+			? ""
+			: "path" in written
+				? ` It is saved at ${written.path}.`
+				: ` Writing the plan file failed: ${written.error}. The user can retry with /plan write.`;
 		return result(
-			`The user approved the Blueprint. The plan is final.${note} Tell the user they can switch to build mode with /mode build.`,
-			{ phase, outcome: "approved", final: true, ...(comment ? { comment } : {}) },
+			`The user approved the Blueprint. The plan is final.${note}${where} Tell the user they can build it with /plan, or switch to build mode with /mode build.`,
+			{
+				phase,
+				outcome: "approved",
+				final: true,
+				...(comment ? { comment } : {}),
+				...(written && "path" in written ? { planPath: written.path } : {}),
+			},
 		);
+	}
 	const guidance = phaseGuidance(next, deps.has, deps.state().architecture).map((line) => `- ${line}`);
 	return result(
 		[

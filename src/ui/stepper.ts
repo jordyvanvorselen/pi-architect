@@ -93,17 +93,6 @@ export function renderStepper(arch: Architecture, total: number, paint: Paint): 
 	return firstFit(candidates, total);
 }
 
-/**
- * Build mode with an approved plan. A placeholder: a later step replaces it with slice progress.
- * ` ▸ BUILD  dedupe-panel-events · 4 slices`.
- */
-export function renderPlanProgress(arch: Architecture, total: number, paint: Paint): string {
-	const parts: Seg[] = [seg(" "), paintSeg(paint, "muted", "▸ BUILD", true), seg("  ")];
-	if (arch.feature) parts.push(paintSeg(paint, "text", arch.feature), paintSeg(paint, "dim", " · "));
-	parts.push(paintSeg(paint, "muted", plural(arch.slices.length, "slice")));
-	return truncateToWidth(join(parts).styled, total);
-}
-
 /** Widget component that draws a line from the current state on every render. Cheap, so no cache. */
 export class LineComponent implements Component {
 	private readonly draw: (width: number) => string | undefined;

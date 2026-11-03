@@ -1,3 +1,6 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import ext, { type ArchitectOverrides } from "../src/index.ts";
 import { FakeUi, plainTheme } from "./helpers.ts";
 
@@ -52,6 +55,13 @@ export interface Sent {
 	options: { triggerTurn?: boolean; deliverAs?: string } | undefined;
 }
 
+/** What a command passed to `ctx.newSession`. */
+export interface NewSessionOptions {
+	parentSession?: string;
+	setup?: (sessionManager: { appendCustomEntry(customType: string, data: unknown): void }) => Promise<void>;
+	withSession?: (ctx: { sendUserMessage(content: string): Promise<void> }) => Promise<void>;
+}
+
 export type BranchEntry = { type: string; customType?: string; data?: unknown; details?: unknown; content?: unknown };
 
 /**
@@ -67,6 +77,12 @@ export function harness(
 		flags?: Record<string, boolean>;
 		/** Tools Pi has besides the extension's own. */
 		builtins?: string[];
+		/** The session's cwd. Default: a fresh temp directory, so a written plan never lands in a real project. */
+		cwd?: string;
+		/** Exit code of every `pi.exec` call. */
+		execCode?: number;
+		/** `ctx.newSession` reports a cancel. */
+		cancelNewSession?: boolean;
 	} = {},
 ) {
 	const handlers: Record<string, Handler[]> = {};
@@ -76,12 +92,16 @@ export function harness(
 	const flags: Record<string, unknown> = {};
 	const entryRenderers: Record<string, (entry: unknown, options: unknown, theme: unknown) => unknown> = {};
 	const sent: Sent[] = [];
+	const userMessages: { content: unknown; options: unknown }[] = [];
+	const execs: { command: string; args: string[] }[] = [];
+	const newSessions: NewSessionOptions[] = [];
 	const entries: { customType: string; data: Record<string, unknown> }[] = [];
 	const branch: BranchEntry[] = options.branch ?? [];
 	const builtins = options.builtins ?? ["read", "bash", "edit", "write", "grep", "find", "ls"];
 	let active = [...builtins];
 	const activeHistory: string[][] = [];
 	let clock = 1_000;
+	const cwd = options.cwd ?? mkdtempSync(join(tmpdir(), "pi-architect-"));
 
 	const pi = {
 		on: (event: string, handler: Handler) => (handlers[event] ??= []).push(handler),
@@ -97,6 +117,11 @@ export function harness(
 			(entryRenderers[type] = renderer),
 		registerMessageRenderer: () => {},
 		sendMessage: (message: Sent["message"], opts: Sent["options"]) => sent.push({ message, options: opts }),
+		sendUserMessage: (content: unknown, opts: unknown) => userMessages.push({ content, options: opts }),
+		exec: async (command: string, args: string[]) => {
+			execs.push({ command, args });
+			return { code: options.execCode ?? 0, stdout: "", stderr: "", killed: false };
+		},
 		appendEntry: (customType: string, data: Record<string, unknown>) => {
 			entries.push({ customType, data });
 			branch.push({ type: "custom", customType, data });
@@ -114,13 +139,22 @@ export function harness(
 
 	const ui = options.ui;
 	const ctx = {
-		cwd: "/tmp/project",
+		cwd,
 		mode: options.mode ?? (ui ? "tui" : "print"),
 		hasUI: Boolean(ui),
 		ui: ui ?? { theme: plainTheme, notify: () => {}, setStatus: () => {}, setWidget: () => {} },
 		isIdle: () => true,
+		newSession: async (opts: NewSessionOptions) => {
+			newSessions.push(opts);
+			return { cancelled: options.cancelNewSession ?? false };
+		},
 		signal: undefined,
-		sessionManager: { getSessionId: () => "test-session", getBranch: () => branch, getCwd: () => "/tmp/project" },
+		sessionManager: {
+			getSessionId: () => "test-session",
+			getSessionFile: () => "/sessions/test.jsonl",
+			getBranch: () => branch,
+			getCwd: () => cwd,
+		},
 	};
 
 	ext(pi as never, { now: () => ++clock, ...options.overrides });
@@ -167,6 +201,7 @@ export function harness(
 	return {
 		pi,
 		ctx,
+		cwd,
 		ui,
 		fire,
 		call,
@@ -179,6 +214,9 @@ export function harness(
 		flags,
 		entryRenderers,
 		sent,
+		userMessages,
+		execs,
+		newSessions,
 		entries,
 		branch,
 		active: () => [...active],

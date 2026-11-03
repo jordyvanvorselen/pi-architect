@@ -137,9 +137,20 @@ export interface Architecture {
 	approvedAt?: number;
 }
 
+/** The plan file this session builds from. Set when the plan is written, or when a build session is handed one. */
+export interface PlanRef {
+	/** Relative to the session's cwd when the file is inside it, absolute otherwise. */
+	path: string;
+	feature: string;
+	slug: string;
+	at: number;
+}
+
 /** Everything pi-architect keeps per session, rebuilt from the branch. */
 export interface ArchitectState {
 	mode: Mode;
 	/** Undefined until the user first enters architect mode, and after a reset in build mode. */
 	architecture?: Architecture;
+	/** The plan file, once written. A new architecture or a reset drops it. */
+	plan?: PlanRef;
 }

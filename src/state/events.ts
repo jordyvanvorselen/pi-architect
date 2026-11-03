@@ -23,7 +23,8 @@ export type ArchitectEvent =
 	| SlicesEvent
 	| SubmitEvent
 	| WithdrawEvent
-	| VerdictEvent;
+	| VerdictEvent
+	| PlanEvent;
 
 interface Base {
 	v: typeof EVENT_VERSION;
@@ -118,6 +119,18 @@ export interface VerdictEvent extends Base {
 	at: number;
 }
 
+/**
+ * The plan file was written after the Blueprint was approved, or a new build session was handed it.
+ * `path` is relative to the session's cwd when the file is inside it.
+ */
+export interface PlanEvent extends Base {
+	type: "plan";
+	path: string;
+	feature: string;
+	slug: string;
+	at: number;
+}
+
 /** Distributes `Omit` over the union, so each variant keeps its own fields. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
 
@@ -141,6 +154,7 @@ const TYPES = new Set<string>([
 	"submit",
 	"withdraw",
 	"verdict",
+	"plan",
 ]);
 
 /** The event in entry data, or `undefined` when the data is not one this version understands. */
