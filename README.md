@@ -39,6 +39,7 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | Command                          | What it does                                 |
 | -------------------------------- | -------------------------------------------- |
 | `/architect <feature>`           | Architect mode, on a new feature             |
+| `/architect board`, `ctrl+alt+b` | See the whole design on one screen           |
 | `/architect reset`               | Discard the architecture in this session     |
 | `/plan`                          | Show the plan and its progress, with actions |
 | `/plan build`                    | Build the plan in a new session              |
@@ -52,6 +53,11 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, esc closes.
 On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests changes, esc closes.
 
+The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
+Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.
+When you close the board, your comments go to the agent as one message, with the decision, diagram or slice each one is about.
+In build mode the board is read-only, for reading the approved design.
+
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
 
 The mode and the design live in the session. They survive reload and resume. Fork the session to try another answer.
@@ -64,6 +70,7 @@ The mode and the design live in the session. They survive reload and resume. For
 - Decisions and verdicts as small cards in the transcript.
 - The brief, modules, findings and risks.
 - Slices with a checked dependency graph, the plan file and build progress.
+- The board, with comments for the agent.
 
 ## Develop
 
