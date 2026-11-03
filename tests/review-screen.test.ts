@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { ReviewAnswer, ReviewRequest } from "../src/review.ts";
 import type { Phase } from "../src/state/phases.ts";
@@ -295,6 +298,29 @@ describe("phase review screens", () => {
 		await h.fire("session_start", { reason: "resume" });
 		await h.call("architect_advance", {});
 		assert.match(ui.customs[0]!.frames[0]!.join("\n"), /Approving writes docs\/plans\/dedupe\.md/);
+	});
+
+	it("Blueprint review shows the numbered path when the plan name is taken, and the plan goes there", async () => {
+		const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
+		const branch = [
+			entry({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
+			entry({ type: "mode", mode: "architect", at: 2 }),
+			...(["frame", "explore", "decide", "design", "slice"] as const).map((phase, i) =>
+				entry({ type: "verdict", phase, verdict: "approved", at: 3 + i }),
+			),
+		];
+		const cwd = await mkdtemp(join(tmpdir(), "pi-architect-"));
+		await mkdir(join(cwd, "docs", "plans"), { recursive: true });
+		await writeFile(join(cwd, "docs", "plans", "dedupe.md"), "someone else's plan");
+		const ui = new FakeUi().keys([KEYS.enter]);
+		const h = harness({ ui, branch, cwd, builtins: ["read"] });
+		await h.fire("session_start", { reason: "resume" });
+		await h.call("architect_advance", {});
+		const shown = join("docs", "plans", "dedupe-2.md");
+		assert.ok(ui.customs[0]!.frames[0]!.join("\n").includes(`Approving writes ${shown}`));
+		const plan = h.entries.find((e) => e.data.type === "plan");
+		assert.equal(plan?.data.path, shown);
+		assert.equal(await readFile(join(cwd, "docs", "plans", "dedupe.md"), "utf8"), "someone else's plan");
 	});
 
 	it("colours the markers and the scrollbar with the theme", () => {

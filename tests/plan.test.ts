@@ -8,7 +8,7 @@ import { buildBlueprint } from "../src/plan/blueprint.ts";
 import { buildSection, kickoff } from "../src/plan/handoff.ts";
 import { isDone, parsePlanProgress, sliceStates } from "../src/plan/progress.ts";
 import { renderPlan } from "../src/plan/render.ts";
-import { displayPath, planFile, readPlan, writePlan } from "../src/plan/write.ts";
+import { displayPath, nextPlanPath, planFile, readPlan, writePlan } from "../src/plan/write.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
 import { fullArchitecture } from "./fixtures/plan/architecture.ts";
@@ -296,6 +296,18 @@ describe("writePlan", () => {
 		assert.equal(await writePlan(dir, "dedupe", "three"), join(dir, "dedupe-3.md"));
 		assert.equal(await readFile(join(dir, "dedupe.md"), "utf8"), "mine");
 		assert.equal(await readFile(join(dir, "dedupe-2.md"), "utf8"), "two");
+	});
+
+	it("predicts the path it will write to, with a taken name numbered the same way", async () => {
+		const dir = await tmp();
+		assert.equal(nextPlanPath(join(dir, "new"), "dedupe"), join(dir, "new", "dedupe.md"), "a missing directory");
+		await writeFile(join(dir, "dedupe.md"), "mine");
+		const predicted = nextPlanPath(dir, "dedupe");
+		assert.equal(predicted, join(dir, "dedupe-2.md"));
+		assert.equal(await writePlan(dir, "dedupe", "two"), predicted);
+		assert.equal(nextPlanPath(dir, "dedupe"), join(dir, "dedupe-3.md"));
+		await Promise.all(Array.from({ length: 100 }, (_, i) => writeFile(join(dir, i ? `x-${i + 1}.md` : "x.md"), "")));
+		assert.equal(nextPlanPath(dir, "x"), undefined, "every name is taken");
 	});
 
 	it("gives up after 100 taken names and reports other errors", async () => {
