@@ -1,5 +1,5 @@
 import type { Component } from "@earendil-works/pi-tui";
-import type { ChoiceEvent, VerdictEvent } from "../state/events.ts";
+import type { ChoiceEvent, ChoiceSnapshot, VerdictEvent } from "../state/events.ts";
 import { nextPhase, PHASE_LABEL } from "../state/phases.ts";
 import type { Decision } from "../state/types.ts";
 import { meter } from "./meter.ts";
@@ -34,13 +34,16 @@ function divider(label: Line, width: number): Line {
 /**
  * A choice on a decision card. Collapsed: `◆ d1 ✓ B In backend "only alarms" · Where do …`.
  * Expanded: the question, the chosen option with its meters and the comment, and the rejected options dimmed.
- * `decision` is the decision as it is now; without it the card shows the bare choice.
+ * The card shows the decision as it was when the user chose, from the snapshot in the event.
+ * Older events have no snapshot: then `current`, the decision as it is now, stands in.
+ * Without either the card shows the bare choice.
  */
 export function choiceEntry(
 	event: ChoiceEvent,
-	decision: Decision | undefined,
+	current: Decision | undefined,
 	expanded: boolean,
 ): (width: number) => Line[] {
+	const decision: ChoiceSnapshot | undefined = event.snapshot ?? current;
 	const option = decision?.options.find((o) => o.id === event.chosen);
 	const star = option && option.id === decision?.recommendation ? [sp(" ★", "warning")] : [];
 	const comment = event.comment ? [sp(`  "${event.comment}"`, "muted")] : [];

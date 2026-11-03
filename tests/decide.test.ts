@@ -73,6 +73,15 @@ describe("architect_decide", () => {
 			'The user chose B "In backend" for q1 (you recommended A). Raise the next open question, or call architect_advance when every decision is made.',
 		);
 		assert.deepEqual(types(h), ["decision", "choice"]);
+		assert.deepEqual(h.entries[1]!.data.snapshot, {
+			question: INPUT.question,
+			recommendation: "A",
+			options: [
+				{ id: "A", title: "In processor", effort: 2, risk: 1 },
+				{ id: "B", title: "In backend", effort: 3, risk: 2 },
+				{ id: "C", title: "Redis stream", effort: 4, risk: 3 },
+			],
+		});
 		const d = arch(h).decisions[0]!;
 		assert.equal(d.chosen, "B");
 		assert.equal(d.recommendation, "A");
@@ -125,6 +134,14 @@ describe("architect_decide", () => {
 			title: "Dedupe at the panel gateway",
 			pros: [],
 			cons: [],
+			effort: 3,
+			risk: 3,
+			byUser: true,
+		});
+		const snapshot = h.entries[2]!.data.snapshot as { options: { id: string; byUser?: boolean }[] };
+		assert.deepEqual(snapshot.options[3], {
+			id: "D",
+			title: "Dedupe at the panel gateway",
 			effort: 3,
 			risk: 3,
 			byUser: true,
