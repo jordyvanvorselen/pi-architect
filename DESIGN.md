@@ -148,8 +148,71 @@ v1 shows Unicode only. Image rendering through Pi's `Image` component can come l
 
 ## The board
 
-`/board` opens a fullscreen overlay with tabs: **Brief · Decisions · Diagrams · Risks · Plan**.
-It shows the whole design at once. Every action has a keyboard path. Mouse works in fullscreen mode.
+`/architect board` or `ctrl+alt+b` opens the board: the whole design on one screen, as an overlay over the terminal.
+The stepper and the build widget show `ctrl+alt+b board` while there is room for it.
+
+```
+╭─ ◆ Board  Dedupe panel events ───────────────────────────────────────────────────────────────╮
+│  ✓ Frame ━━ ✓ Explore ━━ ✓ Decide ━━ ✓ Design ━━ ● Slice ┄┄ Blueprint                        │
+│  Brief   Explore 7   Decisions 2   Diagrams 3   Risks 3 (1 high)   ● Slices 4   Plan draft   │
+├─────────────────────━━━━━━━━━━━━━────────────────────────────────────────────────────────────┤
+│  ┃ q1  Where do panel events get deduplicated?                                               │
+│  ┃     ✓ A  In the processor ★                                                               │
+│  ┃       "Yes, and log every skipped duplicate at debug level."                              │
+│  ┃       B In the backend · C Redis stream                                                   │
+│                                                                                              │
+│    q2  How long do dedup keys stay unique?                                                   │
+│        ✓ B  Per day                                                                          │
+│          A Forever ★                                                                         │
+├──────────────────────────────────────────────────────────────────────────────────────────────┤
+│  1-7 tabs  ↑↓ move  ↵ open  c comment  esc close                                             │
+╰──────────────────────────────────────────────────────────────────────────────────────────────╯
+```
+
+It has seven tabs: **Brief · Explore · Decisions · Diagrams · Risks · Slices · Plan**.
+
+| Tab       | Shows                                                                                  |
+| --------- | -------------------------------------------------------------------------------------- |
+| Brief     | Goal, constraints, out of scope and done-when                                          |
+| Explore   | The module map and the findings                                                        |
+| Decisions | Each decision with its choice. ↵ opens it: every option as a card with effort and risk |
+| Diagrams  | Every diagram, grouped by phase. ↵ opens one full size, and ←/→ scroll it sideways     |
+| Risks     | The risks, high first, with how to soften each one                                     |
+| Slices    | The slices in build order, grouped in steps. ↵ shows files, steps and verify commands  |
+| Plan      | The plan as it will be written, or the plan file once it is. Shows the path            |
+
+- The tab bar shows counts and states, like `Decisions 3 (1 open)`. The tab of the current phase has a `●`.
+  Tabs whose phase has not started are dim. They still open, and say what will appear there and when.
+- On narrow terminals the labels lose their notes, then their counts, then shorten to `Brf Exp Dec`, then to the numbers.
+  Short terminals drop the phases line first.
+- The board follows the architecture live. When the agent adds a risk while the board is open, it shows up.
+
+Keys: 1–7, tab and shift+tab, or ←/→ switch tabs. ↑/↓ or j/k move between items and scroll through a long one.
+PgUp/PgDn, space, Home/End and g/G scroll. ↵ opens an item, `e` opens or closes every item on the tab.
+esc steps back from a diagram and closes the board. q does the same.
+
+Mouse, in Pi's fullscreen mode: click a tab to open it, click an item to select it, click it again or double-click to open it.
+The wheel scrolls, and shift+wheel scrolls a diagram sideways.
+
+### Comments from the board
+
+The board is where the user co-architects. Select anything (a brief field, a finding, a decision, a diagram, a risk, a slice or the plan) and press `c`.
+An editor opens at the bottom. ↵ saves the comment, esc cancels.
+
+- A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3 (s3)`.
+- `c` on an item with a comment edits it. Saving it empty or pressing `x` removes it. `m` jumps to the next comment, on any tab. Clicking an item in the bottom edge jumps to it.
+- Closing the board sends every comment to the agent as one user message:
+
+  ```
+  Board comments:
+  - q2 "How long do dedup keys stay unique?": per day is fine, but use the panel's time zone
+  - slice 3 (s3) "Skip duplicates on insert": also count the skipped ones
+  ```
+
+- When the agent is idle the message starts a turn. When it is working, the message is steered in, so the agent reads it before its next step.
+
+In build mode the board is read-only: it shows the approved architecture and the plan file, without comments.
+A session that only builds from a plan file shows that file on the Plan tab.
 
 ## The model-facing surface
 
@@ -169,7 +232,7 @@ The tools are only active in architect mode, so build mode does not pay for them
 - `/mode [architect|build]` switches the mode.
 - `/architect <feature>` switches to architect mode and starts on a feature.
 - `/architect reset` discards the architecture.
-- `/board` opens the fullscreen overview.
+- `/architect board` (or `ctrl+alt+b`) opens the board, the whole design on one screen.
 - `/plan` shows the plan path and progress and offers the actions below.
 - `/plan build` starts a new session that builds the plan. The new session knows the plan, so it shows the progress.
 - `/plan here` switches to build mode and asks the agent to build the plan.
@@ -243,4 +306,4 @@ The output is deterministic and stable under prettier.
 3. Decision card and Phase Review screen.
 4. Unicode diagram renderer, with tests at narrow widths.
 5. Plan file writer and Blueprint screen.
-6. `/board` overlay.
+6. The board.
