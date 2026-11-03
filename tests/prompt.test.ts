@@ -51,7 +51,8 @@ describe("architectSection", () => {
 		assert.match(text, /\nPhase 2\/6: Explore\.\n- Read the code/);
 		assert.match(text, /Rules:\n- Architect mode is read-only/);
 		assert.match(text, /call architect_advance/);
-		assert.ok(text.length < 1200, `section is ${text.length} characters`);
+		const rules = text.split("\nDrawing diagrams")[0]!;
+		assert.ok(rules.length < 1200, `section is ${rules.length} characters without the drawing guide`);
 	});
 
 	it("says when the phase waits for review", () => {

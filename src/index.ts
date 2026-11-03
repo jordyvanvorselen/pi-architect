@@ -8,6 +8,7 @@ import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
 import type { ArchitectState, Mode } from "./state/types.ts";
 import { advance, AdvanceParams, type AdvanceDetails } from "./tools/advance.ts";
+import { registerDiagramTool } from "./tools/diagram.ts";
 import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
 import type { Paint } from "./ui/paint.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
@@ -216,6 +217,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			return text;
 		},
 	});
+
+	registerDiagramTool(pi, { state: () => state, append, has });
 
 	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, _options, theme) => {
 		const e = entry.data;
