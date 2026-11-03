@@ -36,19 +36,22 @@ Change the directory with `pi --architect-plan-dir <dir>`.
 In build mode a line above the editor shows the progress: `▸ BUILD  plan: dedupe-panel-events  ✓1 ✓2 ●3 ○4   slice 3/4 · Store dedup key`.
 The builder ticks the boxes in the plan file as it works, so the plan file is where progress lives.
 
-| Command                          | What it does                                 |
-| -------------------------------- | -------------------------------------------- |
-| `/architect <feature>`           | Architect mode, on a new feature             |
-| `/architect board`, `ctrl+alt+b` | See the whole design on one screen           |
-| `/architect reset`               | Discard the architecture in this session     |
-| `/plan`                          | Show the plan and its progress, with actions |
-| `/plan build`                    | Build the plan in a new session              |
-| `/plan here`                     | Build the plan in this session               |
-| `/plan copy`, `/plan open`       | Copy the plan path, or open the file         |
-| `/plan write`                    | Write the plan file again when it is missing |
-| `/mode architect`, `/mode build` | Switch mode. `/mode` alone opens a picker    |
-| `ctrl+alt+a`                     | Toggle the mode                              |
-| `pi --architect`                 | Start in architect mode                      |
+| Command                          | What it does                                                      |
+| -------------------------------- | ----------------------------------------------------------------- |
+| `/architect`                     | Switch to architect mode. In architect mode it offers the actions |
+| `/architect <feature>`           | Architect mode, on a new feature                                  |
+| `/architect build`               | Switch to build mode                                              |
+| `/architect board`, `ctrl+alt+b` | See the whole design on one screen                                |
+| `/architect plan`                | Show the plan and its progress, with actions                      |
+| `/architect plan open`           | Open the plan file                                                |
+| `/architect plan write`          | Write the plan file again when it is missing                      |
+| `/architect plan build`          | Build the plan in a new session                                   |
+| `/architect reset`               | Discard the architecture in this session                          |
+| `ctrl+alt+a`                     | Toggle the mode                                                   |
+| `pi --architect`                 | Start in architect mode                                           |
+
+`build`, `board`, `plan` and `reset` are reserved. A feature name cannot start with one of them.
+`/architect plan` alone also offers to build the plan in this session or to copy its path.
 
 On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, esc closes.
 On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests changes, esc closes.

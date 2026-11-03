@@ -21,7 +21,8 @@ Every Pi session has a mode: **architect** or **build**. The user sets it. A new
 | architect | Read-only. Edit and write are off. The architect tools are on. | Walks through the phases. The user approves each gate. |
 | build     | All normal tools. The architect tools are off.                 | Builds, from the approved plan if there is one.        |
 
-- `/mode architect` and `/mode build` switch. `/mode` alone opens a picker.
+- `/architect` switches to architect mode. In architect mode it opens a picker: the board, the plan, build mode or reset.
+- `/architect build` switches to build mode.
 - `ctrl+alt+a` toggles the mode. Pi does not bind this key.
 - `pi --architect` starts in architect mode.
 - `/architect <feature>` switches to architect mode, names the feature and starts the agent on Frame.
@@ -229,14 +230,22 @@ The tools are only active in architect mode, so build mode does not pay for them
 
 ## User commands
 
-- `/mode [architect|build]` switches the mode.
-- `/architect <feature>` switches to architect mode and starts on a feature.
-- `/architect reset` discards the architecture.
-- `/architect board` (or `ctrl+alt+b`) opens the board, the whole design on one screen.
-- `/plan` shows the plan path and progress and offers the actions below.
-- `/plan build` starts a new session that builds the plan. The new session knows the plan, so it shows the progress.
-- `/plan here` switches to build mode and asks the agent to build the plan.
-- `/plan copy`, `/plan open` and `/plan write` copy the path, open the file and write a missing file again.
+Every command lives under `/architect`. The first words `build`, `board`, `plan` and `reset` are reserved. Anything else names a feature.
+
+| Command                 | Does                                                                                            |
+| ----------------------- | ----------------------------------------------------------------------------------------------- |
+| `/architect`            | Switches to architect mode. In architect mode it opens a picker: board, plan, build mode, reset |
+| `/architect <feature>`  | Switches to architect mode and starts on a feature                                              |
+| `/architect build`      | Switches to build mode                                                                          |
+| `/architect board`      | Opens the board, the whole design on one screen. `ctrl+alt+b` does the same                     |
+| `/architect plan`       | Shows the plan path and progress, and offers the actions                                        |
+| `/architect plan open`  | Opens the plan file in the default app                                                          |
+| `/architect plan write` | Writes a missing plan file again                                                                |
+| `/architect plan build` | Starts a new session that builds the plan. It knows the plan, so it shows the progress          |
+| `/architect reset`      | Discards the architecture in this session, after a confirmation                                 |
+
+`/architect plan` alone also offers "Build it here", which switches to build mode and asks the agent to build the plan, and "Copy the path".
+The completion lists the subcommands with a short description, and `open`, `write` and `build` after `plan`.
 
 ## Read-only in architect mode
 
