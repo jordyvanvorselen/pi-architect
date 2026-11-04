@@ -1,4 +1,5 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { buildOrder } from "./plan/order.ts";
 import { PHASE_LABEL, type Phase } from "./state/phases.ts";
 import { counts } from "./state/queries.ts";
 import type { Architecture } from "./state/types.ts";
@@ -55,10 +56,16 @@ export function reviewLines(arch: Architecture, phase: Phase): string[] {
 			for (const d of arch.diagrams) lines.push(`▣ ${d.title}`);
 			if (!arch.diagrams.length) lines.push("No diagrams.");
 			break;
-		case "slice":
-			for (const s of arch.slices)
-				lines.push(`${s.id} ${s.title}${s.dependsOn.length ? ` (after ${s.dependsOn.join(", ")})` : ""}`);
+		case "slice": {
+			// Numbered by build order, like the review screen and the plan file.
+			const order = buildOrder(arch.slices);
+			const number = new Map(order.map((o) => [o.slice.id, o.number]));
+			for (const { number: n, slice: s } of order) {
+				const after = s.dependsOn.map((d) => number.get(d) ?? d).join(", ");
+				lines.push(`${n}. ${s.title}${after ? ` (after ${after})` : ""}`);
+			}
 			break;
+		}
 		case "blueprint": {
 			const c = counts(arch);
 			lines.push(

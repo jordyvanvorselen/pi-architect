@@ -59,11 +59,17 @@ describe("review lines", () => {
 			"How long? → open",
 		]);
 		assert.equal(reviewLines(arch, "design")[0], "▣ Event flow");
-		assert.deepEqual(reviewLines(arch, "slice").slice(0, 2), ["s1 Dedupe table", "s2 Wire it (after s1)"]);
+		assert.deepEqual(reviewLines(arch, "slice").slice(0, 2), ["1. Dedupe table", "2. Wire it (after 1)"]);
 		assert.deepEqual(reviewLines(arch, "blueprint").slice(0, 2), [
 			"Dedupe: Fewer duplicate alarms",
 			"2 modules · 1 decisions · 1 diagrams · 2 slices",
 		]);
+	});
+
+	it("number slices by build order, as on the review screen", () => {
+		const [first, second] = arch.slices;
+		const reversed = { ...arch, slices: [second!, first!] };
+		assert.deepEqual(reviewLines(reversed, "slice").slice(0, 2), ["1. Dedupe table", "2. Wire it (after 1)"]);
 	});
 
 	it("say so when a phase is empty", () => {
