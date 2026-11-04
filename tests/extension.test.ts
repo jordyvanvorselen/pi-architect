@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, FLAG, SHORTCUT, WIDGET_KEY } from "../src/index.ts";
 import { KEEP } from "../src/confirm.ts";
+import { allowedInArchitect } from "../src/readonly/index.ts";
 import { MODE_MESSAGE, SECTION } from "../src/prompt.ts";
 import { REVIEW_MESSAGE } from "../src/reopen.ts";
 import { rebuild } from "../src/state/reducer.ts";
@@ -309,13 +310,50 @@ describe("persistence", () => {
 		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash", "edit"] });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect");
-		assert.deepEqual(h.entries[0]!.data.keptOff, ["write"]);
+		assert.deepEqual(h.entries[0]!.data.turnedOff, ["edit"]);
 		const restored = h.active();
 		const after = harness({ ui: new FakeUi(), branch: [...h.branch], activeTools: restored });
 		await after.fire("session_start", { reason: "resume" });
 		await after.command("architect", "build");
 		assert.ok(after.active().includes("edit"));
 		assert.ok(!after.active().includes("write"));
+	});
+
+	it("turns off every tool the read-only allowlist does not allow, and back on exactly those in build mode", async () => {
+		const builtins = ["read", "bash", "edit", "write", "grep", "find", "ls", "powershell", "mcp__web", "mcp__db"];
+		// mcp__db is registered but was off before architect mode, so build mode leaves it off.
+		const before = builtins.filter((n) => n !== "mcp__db");
+		const h = harness({ ui: new FakeUi(), builtins, activeTools: before });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		const outside = h.active().filter((n) => !allowedInArchitect(n));
+		assert.deepEqual(outside, []);
+		assert.deepEqual(
+			h
+				.active()
+				.filter((n) => !n.startsWith("architect_"))
+				.sort(),
+			["bash", "find", "grep", "ls", "read"],
+		);
+		// Pi restores the architect tool set after a reload; build mode still knows what to bring back.
+		const after = harness({ ui: new FakeUi(), builtins, branch: [...h.branch], activeTools: h.active() });
+		await after.fire("session_start", { reason: "reload" });
+		await after.command("architect", "build");
+		assert.deepEqual(after.active().sort(), [...before].sort());
+	});
+
+	it("turns off a tool that turned on during architect mode before the next request, and restores it later", async () => {
+		const builtins = ["read", "bash", "edit", "write", "mcp__late"];
+		const h = harness({ ui: new FakeUi(), builtins, activeTools: ["read", "bash", "edit", "write"] });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		// An MCP server connected late, and Pi turned its tool on.
+		h.pi.setActiveTools([...h.active(), "mcp__late"]);
+		await h.startRun();
+		assert.ok(!h.active().includes("mcp__late"));
+		assert.deepEqual(h.entries.at(-1)!.data, { v: 1, type: "tools", turnedOff: ["mcp__late"] });
+		await h.command("architect", "build");
+		assert.deepEqual(h.active().sort(), ["bash", "edit", "mcp__late", "read", "write"]);
 	});
 
 	it("leaves the tools alone in a session that was never in architect mode", async () => {

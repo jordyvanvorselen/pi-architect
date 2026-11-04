@@ -54,16 +54,18 @@ describe("mode", () => {
 		assert.equal(arch(state).startedAt, 1);
 	});
 
-	it("remembers the write tools the user had off when entering architect mode, until the next entry", () => {
-		const first = replay({ type: "mode", mode: "architect", at: 1, keptOff: ["write"] });
-		assert.deepEqual(first.keptOff, ["write"]);
-		const back = reduce(first, event({ type: "mode", mode: "build", at: 2 }));
-		assert.deepEqual(back.keptOff, ["write"]);
-		const again = reduce(back, event({ type: "mode", mode: "architect", at: 3, keptOff: [] }));
-		assert.deepEqual(again.keptOff, []);
-		// Events from before keptOff existed: nothing was known to be off.
-		assert.deepEqual(replay({ type: "mode", mode: "architect", at: 1 }).keptOff, []);
-		assert.equal(rebuild([]).keptOff, undefined);
+	it("remembers the tools architect mode turned off, until the next entry", () => {
+		const first = replay({ type: "mode", mode: "architect", at: 1, turnedOff: ["edit", "mcp__web"] });
+		assert.deepEqual(first.turnedOff, ["edit", "mcp__web"]);
+		const more = reduce(first, event({ type: "tools", turnedOff: ["mcp__db", "edit"] }));
+		assert.deepEqual(more.turnedOff, ["edit", "mcp__web", "mcp__db"]);
+		const back = reduce(more, event({ type: "mode", mode: "build", at: 2 }));
+		assert.deepEqual(back.turnedOff, ["edit", "mcp__web", "mcp__db"]);
+		const again = reduce(back, event({ type: "mode", mode: "architect", at: 3, turnedOff: [] }));
+		assert.deepEqual(again.turnedOff, []);
+		// Events from before the field existed: architect mode turned the write tools off.
+		assert.deepEqual(replay({ type: "mode", mode: "architect", at: 1 }).turnedOff, ["edit", "write", "powershell"]);
+		assert.equal(rebuild([]).turnedOff, undefined);
 	});
 });
 
@@ -85,7 +87,7 @@ describe("begin and reset", () => {
 			{ type: "mode", mode: "build", at: 2 },
 			{ type: "reset", at: 3 },
 		);
-		assert.deepEqual(state, { mode: "build", keptOff: [] });
+		assert.deepEqual(state, { mode: "build", turnedOff: ["edit", "write", "powershell"] });
 	});
 
 	it("reset in architect mode starts over with an empty architecture", () => {

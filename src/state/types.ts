@@ -158,8 +158,8 @@ export interface ArchitectState {
 	/** The plan file, once written. A new architecture or a reset keeps it: the file is still there to build. */
 	plan?: PlanRef;
 	/**
-	 * Write tools the user had off when they last entered architect mode. Build mode turns every other write
-	 * tool back on. Undefined while the session was never in architect mode, so build mode leaves the tools alone.
+	 * Tools architect mode turned off since the user last entered it. Build mode turns exactly these back on.
+	 * Undefined while the session was never in architect mode, so build mode leaves the tools alone.
 	 */
-	keptOff?: string[];
+	turnedOff?: string[];
 }

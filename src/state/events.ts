@@ -35,7 +35,8 @@ export type ArchitectEvent =
 	| SubmitEvent
 	| WithdrawEvent
 	| VerdictEvent
-	| PlanEvent;
+	| PlanEvent
+	| ToolsEvent;
 
 interface Base {
 	v: typeof EVENT_VERSION;
@@ -47,10 +48,16 @@ export interface ModeEvent extends Base {
 	mode: Mode;
 	at: number;
 	/**
-	 * Entering architect mode: the write tools that were already off, so build mode leaves them off.
+	 * Entering architect mode: the tools it turned off, so build mode turns exactly those back on.
 	 * Pi restores the tool set from the transcript after a reload, so the event has to remember this.
 	 */
-	keptOff?: string[];
+	turnedOff?: string[];
+}
+
+/** Architect mode turned more tools off, e.g. ones that registered after it started. */
+export interface ToolsEvent extends Base {
+	type: "tools";
+	turnedOff: string[];
 }
 
 /** `/architect <feature>`: a new architecture for a named feature. Replaces any earlier one. */
@@ -198,6 +205,7 @@ const TYPES = new Set<string>([
 	"withdraw",
 	"verdict",
 	"plan",
+	"tools",
 ]);
 
 /** The event in entry data, or `undefined` when the data is not one this version understands. */
