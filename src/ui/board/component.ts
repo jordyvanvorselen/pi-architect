@@ -58,6 +58,8 @@ export interface BoardOptions {
 	markdown: MarkdownTheme;
 	/** The tab to open on. Default: the tab of the phase the agent works on. */
 	tab?: BoardTab;
+	/** No comments, also in architect mode. For a board opened over a review screen or decision card. */
+	readOnly?: boolean;
 	/** Called once, with the comments to send. Empty when there are none. */
 	done: (comments: BoardComment[]) => void;
 }
@@ -98,7 +100,7 @@ const DIAGRAM_KEYS = new Set(["h", "l", "0", "$"]);
  *   in a detail view where ←/→ scroll it sideways. `e` opens or closes every item on the tab.
  * - `c` writes a comment on the selected item, `x` removes it, `m` jumps to the next one. esc or q closes
  *   the board. With comments it first asks in the bottom bar: ↵ hands them to `done`, `d` discards them
- *   and esc goes back to the board. In build mode the board is read-only.
+ *   and esc goes back to the board. In build mode, or when opened with `readOnly`, the board is read-only.
  */
 export class BoardScreen implements Component, Focusable {
 	readonly capturesViewportInput = true;
@@ -169,7 +171,7 @@ export class BoardScreen implements Component, Focusable {
 	}
 
 	private get readOnly(): boolean {
-		return this.data.mode === "build";
+		return this.options.readOnly === true || this.data.mode === "build";
 	}
 
 	private defaultTab(): BoardTab {

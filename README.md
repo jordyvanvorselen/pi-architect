@@ -53,13 +53,13 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 `build`, `board`, `plan` and `reset` are reserved. A feature name cannot start with one of them.
 `/architect plan` alone also offers to build the plan in this session or to copy its path.
 
-On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, esc closes.
-On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests changes, esc closes.
+On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
+On a review screen: ↑/↓ and PgUp/PgDn scroll, ↵ approves, `r` requests changes, `b` opens the board, esc closes.
 
 The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
 Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.
 When you close the board with comments, it asks whether to send them. ↵ sends them to the agent as one message, with the decision, diagram or slice each one is about. `d` discards them and esc goes back to the board.
-In build mode the board is read-only, for reading the approved design.
+In build mode the board is read-only, for reading the approved design. So is the board you open with `b` from a decision card or review screen. Closing it takes you back to where you were.
 
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
 

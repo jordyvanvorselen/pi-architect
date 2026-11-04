@@ -1,8 +1,9 @@
 import { Key, matchesKey, type Component, type Focusable, type TUI } from "@earendil-works/pi-tui";
 import type { ReviewAnswer, ReviewRequest } from "../../review.ts";
-import { InputGrace, type GraceOptions } from "../grace.ts";
+import { InputGrace } from "../grace.ts";
 import { InlineEditor } from "../inline-editor.ts";
 import type { Paint } from "../paint.ts";
+import type { ScreenOptions } from "../screen-options.ts";
 import { paintLine, type Line } from "../spans.ts";
 import type { ReviewBody } from "./common.ts";
 import { renderReview, reviewGeometry, type ReviewMode } from "./screen.ts";
@@ -12,8 +13,8 @@ const SPARE_ROWS = 4;
 
 /**
  * The interactive Phase Review screen. ↑/↓, PgUp/PgDn and Home/End scroll; ↵ approves; `r` opens an inline
- * editor for the requested changes; esc steps back from the editor or closes the screen.
- * Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
+ * editor for the requested changes; `b` opens the board over the screen; esc steps back from the editor or
+ * closes the screen. Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
  * Calls `done` once, with the verdict or undefined.
  */
 export class ReviewScreen implements Component, Focusable {
@@ -33,6 +34,7 @@ export class ReviewScreen implements Component, Focusable {
 	private cache: { width: number; lines: string[] } | undefined;
 	private hasFocus = false;
 	private readonly grace: InputGrace;
+	private readonly board: (() => void) | undefined;
 
 	constructor(
 		tui: TUI,
@@ -40,9 +42,10 @@ export class ReviewScreen implements Component, Focusable {
 		request: ReviewRequest,
 		body: ReviewBody,
 		done: (answer: ReviewAnswer | undefined) => void,
-		grace: GraceOptions = {},
+		{ board, ...grace }: ScreenOptions = {},
 	) {
 		this.grace = new InputGrace(grace);
+		this.board = board;
 		this.tui = tui;
 		this.paint = paint;
 		this.request = request;
@@ -97,6 +100,7 @@ export class ReviewScreen implements Component, Focusable {
 		else if (matchesKey(data, Key.home)) this.scrollTo(0);
 		else if (matchesKey(data, Key.end)) this.scrollTo(this.maxScroll);
 		else if (matchesKey(data, Key.escape)) this.done(undefined);
+		else if (matchesKey(data, "b") && this.board) this.board();
 		else if (this.grace.active) return;
 		else if (matchesKey(data, Key.enter)) this.done({ verdict: "approved" });
 		else if (matchesKey(data, "r")) {
@@ -129,6 +133,7 @@ export class ReviewScreen implements Component, Focusable {
 				body: this.bodyLines(reviewGeometry(width).inner),
 				scroll: this.scroll,
 				mode: this.mode,
+				board: this.board !== undefined,
 				...(editor ? { editor: (w: number) => editor.lines(w) } : {}),
 				maxRows: Math.max(12, this.tui.terminal.rows - SPARE_ROWS),
 			},

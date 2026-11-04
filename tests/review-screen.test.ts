@@ -8,7 +8,8 @@ import type { Phase } from "../src/state/phases.ts";
 import { PHASES } from "../src/state/phases.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
-import { GRACE_MS, InputGrace, type GraceOptions } from "../src/ui/grace.ts";
+import { GRACE_MS, InputGrace } from "../src/ui/grace.ts";
+import type { ScreenOptions } from "../src/ui/screen-options.ts";
 import { moduleTree } from "../src/ui/review/explore.ts";
 import { createPhaseReview, phaseReview, REVIEW_BODIES, renderReview, ReviewScreen } from "../src/ui/review/index.ts";
 import { reviewGeometry } from "../src/ui/review/screen.ts";
@@ -109,7 +110,7 @@ function screen(
 	arch: Architecture = ARCH,
 	rows = 200,
 	summary?: string,
-	grace: GraceOptions = { graceMs: 0 },
+	grace: ScreenOptions = { graceMs: 0 },
 ) {
 	const answers: (ReviewAnswer | undefined)[] = [];
 	const request: ReviewRequest = { arch, phase, ...(summary ? { summary } : {}) };
@@ -131,7 +132,10 @@ const text = (phase: Phase, width = 80, arch = ARCH) => screen(phase, arch).line
 describe("phase review screens", () => {
 	it("fit every width from 30 to 200, for every phase, browsing and writing", () => {
 		for (const phase of PHASES) {
-			const s = screen(phase, ARCH, 30, "Check the scope, and say what is missing before we move on.");
+			const s = screen(phase, ARCH, 30, "Check the scope, and say what is missing before we move on.", {
+				graceMs: 0,
+				board: () => {},
+			});
 			assertFits((w) => s.component.render(w), [30, 40, 80, 120, 200]);
 			s.keys("r", ...type("a long comment that wraps"));
 			assertFits((w) => s.component.render(w), [30, 40, 80, 120, 200]);
@@ -512,6 +516,31 @@ describe("review screen grace period", () => {
 		t = 300;
 		s.keys(KEYS.enter);
 		assert.deepEqual(s.answers, [{ verdict: "approved" }]);
+	});
+
+	it("opens the board with b, also during the grace period, and keeps its place", () => {
+		let boards = 0;
+		const s = screen("blueprint", ARCH, 14, undefined, { now: () => 0, board: () => boards++ });
+		assert.match(
+			s.lines(100).join("\n"),
+			/↵ approve Blueprint {2}r request changes {2}↑↓ scroll {2}b board {2}esc close/,
+		);
+		s.keys(KEYS.down, KEYS.down, "b");
+		assert.equal(boards, 1);
+		assert.deepEqual(s.answers, []);
+		assert.deepEqual(s.component.state, { scroll: 2, mode: "browse" });
+		const plainScreen = screen("blueprint", ARCH, 14);
+		assert.doesNotMatch(plainScreen.lines(100).join("\n"), /b board/);
+		plainScreen.keys("b");
+		assert.deepEqual(plainScreen.answers, [], "b does nothing without a board");
+	});
+
+	it("types b in the change request instead of opening the board", () => {
+		let boards = 0;
+		const s = screen("frame", ARCH, 200, undefined, { graceMs: 0, board: () => boards++ });
+		s.keys("r", "b", KEYS.enter);
+		assert.equal(boards, 0);
+		assert.deepEqual(s.answers, [{ verdict: "changes", comment: "b" }]);
 	});
 
 	it("still closes with esc during the grace period", () => {

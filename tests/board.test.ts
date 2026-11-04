@@ -904,3 +904,63 @@ describe("/architect board and ctrl+alt+b", () => {
 		assert.doesNotMatch(ui.widgetLines(WIDGET_KEY, 80)![0]!, /board/);
 	});
 });
+
+describe("the board over a review screen or decision card", () => {
+	const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
+	const framed = () => [
+		entry({ type: "mode", mode: "architect", at: 1 }),
+		entry({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
+		entry({ type: "update", phase: "frame", brief: { goal: "One event per incident.", doneWhen: ["npm test"] } }),
+	];
+
+	it("opens read-only with b during the review's grace period, and the review goes on where it was", async () => {
+		let t = 10_000;
+		const ui = new FakeUi();
+		const h = harness({ ui, branch: framed(), overrides: { now: () => t, inputGrace: 300 } });
+		await h.fire("session_start", { reason: "resume" });
+		ui.keys(
+			["b", () => ui.screenClosed(), () => (t += 300), KEYS.enter],
+			["c", ...type("ignored"), KEYS.enter, "x", "m", KEYS.escape],
+		);
+		const result = await h.call("architect_advance", {});
+		const [review, overlay] = ui.customs;
+		assert.match(review!.frames[0]!.join("\n"), /↵ approve Frame {2}r request changes {2}b board {2}esc close/);
+		assert.equal((overlay!.options as { overlay: boolean }).overlay, true);
+		const frame = overlay!.frames.at(-1)!.join("\n");
+		assert.match(frame, /◆ Board {2}Dedupe[\s\S]*read-only/);
+		assert.match(frame, /One event per incident\./);
+		assert.doesNotMatch(frame, /comment|✎/);
+		assert.equal(review!.frames.at(-1)!.join("\n"), review!.frames[0]!.join("\n"), "the review is as it was");
+		assert.deepEqual(result.details, { phase: "frame", outcome: "approved", next: "explore" });
+		assert.deepEqual(h.userMessages, []);
+		assert.ok(ui.done);
+	});
+
+	it("opens read-only with b on a decision card, which keeps its focus", async () => {
+		const ui = new FakeUi();
+		const h = harness({
+			ui,
+			branch: [
+				...framed(),
+				entry({ type: "verdict", phase: "frame", verdict: "approved", at: 2 }),
+				entry({ type: "verdict", phase: "explore", verdict: "approved", at: 3 }),
+			],
+		});
+		await h.fire("session_start", { reason: "resume" });
+		ui.keys([KEYS.right, "b", () => ui.screenClosed(), KEYS.enter], ["q"]);
+		const result = await h.call("architect_decide", {
+			question: "Where do events get deduplicated?",
+			options: [
+				{ title: "In processor", pros: ["one owner"], cons: ["state"], effort: 2, risk: 1 },
+				{ title: "In backend", pros: ["DB context"], cons: ["later"], effort: 3, risk: 2 },
+			],
+			recommended: "A",
+			reason: "One owner.",
+		});
+		const [card, overlay] = ui.customs;
+		assert.match(card!.frames[0]!.join("\n"), /b board {2}esc close/);
+		assert.match(overlay!.frames[0]!.join("\n"), /read-only/);
+		assert.equal((result.details as { chosen?: string }).chosen, "B");
+		assert.ok(ui.done);
+	});
+});

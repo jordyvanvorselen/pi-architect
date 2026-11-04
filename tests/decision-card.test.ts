@@ -5,7 +5,7 @@ import type { DecisionAnswer, DecisionRequest } from "../src/decision.ts";
 import type { Decision, DecisionOption } from "../src/state/types.ts";
 import { chooseLayout, frameWidth, renderDecision, split } from "../src/ui/decision/card.ts";
 import { createDecisionCard, DecisionCard } from "../src/ui/decision/index.ts";
-import type { GraceOptions } from "../src/ui/grace.ts";
+import type { ScreenOptions } from "../src/ui/screen-options.ts";
 import { paintLine } from "../src/ui/spans.ts";
 import { ansiTheme, assertFits, FakeUi, KEYS, plain, plainTheme, tagTheme, type } from "./helpers.ts";
 
@@ -35,7 +35,7 @@ const DECISION: Decision = {
 const FOUR: Decision = { ...DECISION, options: [...DECISION.options, option("D", "Client side")] };
 
 /** A card without the input grace period unless `grace` says otherwise, so keys land at once. */
-function card(request: Partial<DecisionRequest> = {}, rows = 200, grace: GraceOptions = { graceMs: 0 }) {
+function card(request: Partial<DecisionRequest> = {}, rows = 200, grace: ScreenOptions = { graceMs: 0 }) {
 	const answers: (DecisionAnswer | undefined)[] = [];
 	let renders = 0;
 	const tui = { requestRender: () => renders++, terminal: { rows } };
@@ -110,7 +110,7 @@ describe("decision card layout", () => {
 	it("fits every width from 30 to 200, in every mode", () => {
 		const widths = [30, 40, 60, 80, 100, 120, 160, 200];
 		for (const decision of [DECISION, FOUR, { ...DECISION, options: DECISION.options.slice(0, 2) }]) {
-			const c = card({ decision });
+			const c = card({ decision }, 200, { graceMs: 0, board: () => {} });
 			assertFits((w) => c.component.render(w), widths);
 			c.keys("c", ...type("a comment that is long enough to wrap in a narrow card"));
 			assertFits((w) => c.component.render(w), widths);
@@ -313,6 +313,29 @@ describe("decision card grace period", () => {
 		t += 1;
 		c.keys(KEYS.enter);
 		assert.deepEqual(c.answers, [{ kind: "choose", option: "C" }]);
+	});
+
+	it("opens the board with b, also during the grace period, and keeps the focus", () => {
+		let boards = 0;
+		const c = card({}, 200, { now: () => 0, board: () => boards++ });
+		assert.match(
+			c.lines(100).join("\n"),
+			/↵ choose {2}c choose with comment {2}n own option {2}\? ask {2}←→ move {2}b board {2}esc close/,
+		);
+		assert.match(c.lines(50).join("\n"), /b board/);
+		c.keys(KEYS.right, "b");
+		assert.equal(boards, 1);
+		assert.deepEqual(c.answers, []);
+		assert.deepEqual(c.component.state, { focus: "B", mode: "browse" });
+		assert.doesNotMatch(card().lines(100).join("\n"), /b board/);
+	});
+
+	it("types b in an editor instead of opening the board", () => {
+		let boards = 0;
+		const c = card({}, 200, { graceMs: 0, board: () => boards++ });
+		c.keys("?", "b", KEYS.enter);
+		assert.equal(boards, 0);
+		assert.deepEqual(c.answers, [{ kind: "ask", question: "b" }]);
 	});
 
 	it("still closes with esc during the grace period", () => {

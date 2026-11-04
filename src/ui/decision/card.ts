@@ -23,6 +23,8 @@ export interface DecisionView {
 	/** Index of the focused option. */
 	focus: number;
 	mode: DecisionMode;
+	/** Whether `b` opens the board, for the key hints. */
+	board?: boolean;
 	/** 1-based position of this decision, for "Decision 3/5". */
 	index?: number;
 	total?: number;
@@ -186,25 +188,20 @@ const EDIT_LABEL: Record<Exclude<DecisionMode, "browse">, string> = {
 	ask: "Your question for the agent",
 };
 
-function browseHints(inner: number, move: string): Line[] {
+function browseHints(inner: number, move: string, board: boolean): Line[] {
+	const extra = board ? ([["b", "board"]] as const) : [];
 	const wide = [
 		["↵", "choose"],
 		["c", "choose with comment"],
 		["n", "own option"],
 		["?", "ask"],
 		[move, "move"],
+		...extra,
 		["esc", "close"],
 	] as const;
 	if (lineWidth(hints(wide)) <= inner) return [hints(wide)];
 	return hintLines(
-		[
-			["↵", "choose"],
-			["c", "comment"],
-			["n", "own"],
-			["?", "ask"],
-			[move, "move"],
-			["esc", "close"],
-		],
+		[["↵", "choose"], ["c", "comment"], ["n", "own"], ["?", "ask"], [move, "move"], ...extra, ["esc", "close"]],
 		inner,
 	);
 }
@@ -264,7 +261,7 @@ function body(view: DecisionView, inner: number, layout: CardLayout): Line[] {
 		lines.push([], clipLine(label, inner), ...(view.editor?.(inner) ?? []));
 		lines.push(...editHints(inner));
 	} else {
-		lines.push([], ...browseHints(inner, layout.kind === "list" ? "↑↓" : "←→"));
+		lines.push([], ...browseHints(inner, layout.kind === "list" ? "↑↓" : "←→", view.board === true));
 	}
 	return lines;
 }

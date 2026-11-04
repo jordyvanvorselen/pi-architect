@@ -58,7 +58,8 @@ export function assertComponentFits(component: Component, widths: readonly numbe
 type Answer = string | boolean | undefined;
 
 /** A key for a custom screen, or a step to run between keys. */
-export type Key = string | (() => void);
+/** A key for a custom screen, or a step in between. A step that returns a promise is awaited. */
+export type Key = string | (() => unknown);
 
 /** Key sequences, as terminals send them. */
 export const KEYS = {
@@ -132,6 +133,13 @@ export class FakeUi {
 		return this;
 	}
 
+	private readonly closedWaiters: (() => void)[] = [];
+
+	/** Resolves when the next custom screen closes, e.g. a board opened over a review screen. */
+	screenClosed(): Promise<void> {
+		return new Promise((resolve) => this.closedWaiters.push(resolve));
+	}
+
 	/** True when every scripted answer was used. */
 	get done(): boolean {
 		return Object.values(this.answers).every((q) => q.length === 0) && this.screens.length === 0;
@@ -155,12 +163,13 @@ export class FakeUi {
 		for (const key of keys) {
 			if (result) break;
 			record.frames.push(plain(component.render(this.columns)));
-			if (typeof key === "function") key();
+			if (typeof key === "function") await key();
 			else component.handleInput?.(key);
 			await Promise.resolve();
 		}
 		await Promise.resolve();
 		if (!result) throw new Error("custom screen still open after its keys");
+		for (const resolve of this.closedWaiters.splice(0)) resolve();
 		return result.value;
 	};
 
