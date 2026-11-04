@@ -69,7 +69,7 @@ describe("writing the plan on Blueprint approval", () => {
 		const sliced = await h.call("architect_slice", { slices: [SLICE] });
 		assert.match(
 			sliced.content[0]!.text,
-			/^Saved 1 slice\. Build order: 1\. s1\. Check: Not in the module map, so the plan lists it as new: src\/key\.ts\. .* Slice is ready/,
+			/^Saved 1 slice\. Build order: 1\. Store the key\. Check: Not in the module map, so the plan lists it as new: src\/key\.ts\. .* Slice is ready/,
 		);
 		await h.call("architect_advance", {});
 		const final = await h.call("architect_advance", {});
