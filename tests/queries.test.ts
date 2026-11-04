@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { counts, missing, nextId, phaseState, sliceProblems, slugify } from "../src/state/queries.ts";
+import { counts, missing, moduleFiles, nextId, phaseState, sliceProblems, slugify } from "../src/state/queries.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture, Slice } from "../src/state/types.ts";
 
@@ -118,5 +118,17 @@ describe("missing", () => {
 			"s1 depends on unknown slice s2",
 		]);
 		assert.deepEqual(missing(at({ phase: "slice", slices: [slice("s1")] })), []);
+	});
+});
+
+describe("moduleFiles", () => {
+	it("leaves out a file that only repeats the module's path", () => {
+		assert.deepEqual(moduleFiles({ path: "src/store/todo-store.ts", files: ["src/store/todo-store.ts"] }), []);
+		assert.deepEqual(
+			moduleFiles({ path: "src/store/todo-store.ts", files: ["todo-store.ts", "store/todo-store.ts"] }),
+			[],
+		);
+		assert.deepEqual(moduleFiles({ path: "src/store/", files: ["src/store/a.ts", "src/store"] }), ["src/store/a.ts"]);
+		assert.deepEqual(moduleFiles({ path: "src/store", files: ["src/store/a.ts", "b.ts"] }), ["src/store/a.ts", "b.ts"]);
 	});
 });

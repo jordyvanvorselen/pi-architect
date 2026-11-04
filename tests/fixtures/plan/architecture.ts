@@ -35,7 +35,12 @@ export function fullArchitecture(): Architecture {
 				files: ["src/ingest/processor.ts", "src/ingest/schema.ts"],
 				note: "Parses panel messages and writes them with `insertEvent`.",
 			},
-			{ path: "src/api/alarms", role: "context", files: ["src/api/alarms/list.ts"], note: "Reads `panel_events`." },
+			{
+				path: "src/api/alarms/list.ts",
+				role: "context",
+				files: ["src/api/alarms/list.ts"],
+				note: "Reads `panel_events`.",
+			},
 			{
 				path: "src/ingest/dedup",
 				role: "new",

@@ -56,8 +56,7 @@ Panels send the same alarm event up to five times when the network flaps. Store 
 - `tests/ingest` (new): Not in the module map from Explore. The slices create or change these files.
   - `tests/ingest/key.test.ts`
   - `tests/ingest/processor.test.ts`
-- `src/api/alarms` (read only, do not change): Reads `panel_events`.
-  - `src/api/alarms/list.ts`
+- `src/api/alarms/list.ts` (read only, do not change): Reads `panel_events`.
 
 ### Findings and existing patterns
 

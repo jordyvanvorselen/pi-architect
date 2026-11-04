@@ -1,4 +1,4 @@
-import { slugify } from "../state/queries.ts";
+import { moduleFiles, slugify } from "../state/queries.ts";
 import type { Architecture, Diagram, ModuleRole, Severity } from "../state/types.ts";
 import { buildBlueprint, type Blueprint, type BlueprintDecision, type BlueprintOption } from "./blueprint.ts";
 import type { Ordered } from "./order.ts";
@@ -141,7 +141,7 @@ function brief(bp: Blueprint): string[] {
 function context(bp: Blueprint): string[] {
 	const modules = bp.modules.map((m) => {
 		const head = `- ${code(m.path)} (${ROLE[m.role]})${m.note ? `: ${inline(m.note)}` : ""}`;
-		return [head, ...m.files.map((f) => `  - ${code(f)}`)].join("\n");
+		return [head, ...moduleFiles(m).map((f) => `  - ${code(f)}`)].join("\n");
 	});
 	return [
 		"## Context",
