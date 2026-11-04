@@ -151,7 +151,7 @@ export function registerDiagramTool(pi: ExtensionAPI, deps: ToolDeps): void {
 			"It is checked for alignment first; when rejected, fix the findings and send it again. Give id to replace a diagram.",
 		promptSnippet: "Show the user a Unicode diagram you drew of the architecture",
 		promptGuidelines: [
-			"Use architect_diagram for every architecture picture instead of drawing it in chat. Follow the drawing rules in the phase guidance.",
+			"Use architect_diagram for every architecture picture instead of drawing it in chat. Explore and Design come with drawing rules; a rejection lists every finding to fix.",
 			"After feedback on a diagram, call architect_diagram again with its id to replace it.",
 		],
 		parameters: DiagramParams,

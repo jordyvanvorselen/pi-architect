@@ -287,7 +287,7 @@ export function registerUpdateTool(pi: ExtensionAPI, deps: ToolDeps): void {
 		description:
 			"Record content of the current architect phase and return at once: feature name, brief (Frame), modules and findings " +
 			"(Explore and later), risks (any phase). Lists in brief replace the old list, modules update by path, " +
-			"a risk with an id changes that risk. remove takes finding or risk ids and module paths.",
+			"a risk with an id changes that risk. remove takes ids of findings, risks or diagrams, and module paths.",
 		promptSnippet: "Record the brief, modules, findings and risks of the current architect phase",
 		promptGuidelines: [
 			"Use architect_update to record phase content as you go. The user sees it on screen, so do not repeat it in chat.",

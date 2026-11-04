@@ -26,6 +26,7 @@ Each Pi session has a mode. **Build** is normal Pi and the default. **Architect*
 - Edit and write are off.
 - Bash only runs read-only commands. `ls && rm x`, `echo x > file` and `$(…)` are blocked, and the agent is told why.
 - The agent records the design with `architect_update`.
+- The agent draws components, data flow and sequences as Unicode diagrams with `architect_diagram`. Each diagram is checked for alignment before you see it, with `[new]`, `[changed]` and `[removed]` parts highlighted.
 - The agent raises each open question with `architect_decide`. A decision card shows the options side by side. You pick one, add a comment, write your own option or ask a question first.
 - The agent calls `architect_advance` when a phase is done. A review screen shows the phase. You approve it or ask for changes with a comment.
 - The agent splits the work into slices with `architect_slice`. Each slice has files, concrete steps and verify commands.
@@ -74,6 +75,7 @@ The mode and the design live in the session. They survive reload and resume. For
 - Decision cards, and a review screen for every phase with approve and request changes.
 - Decisions and verdicts as small cards in the transcript.
 - The brief, modules, findings and risks.
+- Unicode diagrams, checked for alignment and highlighted.
 - Slices with a checked dependency graph, the plan file and build progress.
 - The board, with comments for the agent.
 
