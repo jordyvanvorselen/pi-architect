@@ -1,4 +1,5 @@
 import { PHASE_LABEL, PHASES, phaseIndex, type Phase } from "../../state/phases.ts";
+import { clip } from "../paint.ts";
 import {
 	boxRow,
 	edge,
@@ -53,6 +54,8 @@ export interface ReviewLayout {
 export const MAX_REVIEW_WIDTH = 120;
 /** Body rows below which the summary gives up its rows to the body. */
 const MIN_VIEWPORT = 3;
+/** Summary lines a screen keeps when the body does not fit. */
+const SHORT_SUMMARY = 2;
 
 /** What esc asks before the screen closes without a verdict. */
 export const CLOSE_QUESTION = "Close without a verdict? The agent will stop.";
@@ -142,19 +145,24 @@ export function renderReview(view: ReviewView, total: number): ReviewLayout {
 		sp(` ${phaseIndex(view.phase) + 1}/${PHASES.length}`, "dim"),
 	];
 	const top = edge(width, "round", "border", "top", title, view.feature ? [sp(view.feature, "dim")] : []);
-	const summary: Line[] = [];
-	if (view.summary) {
-		summary.push(row([]));
-		for (const line of wrap(view.summary, inner - 2)) summary.push(row([sp("▍ ", "accent"), sp(line, "muted")]));
-		summary.push(rule(width, "border"));
-	}
+	const summaryRows = (short: boolean): Line[] => {
+		if (!view.summary) return [];
+		let text = wrap(view.summary, inner - 2);
+		if (short && text.length > SHORT_SUMMARY)
+			text = [...text.slice(0, SHORT_SUMMARY - 1), clip(text.slice(SHORT_SUMMARY - 1).join(" "), inner - 2)];
+		const lines = text.map((line) => row([sp("▍ ", "accent"), sp(line, "muted")]));
+		return [...(short ? [] : [row([])]), ...lines, rule(width, "border")];
+	};
+	let summary = summaryRows(false);
 	let head: Line[] = [top, ...summary];
 	const body = [[], ...view.body, []];
 	const foot = (scrollable: boolean) => footer(view, inner, scrollable);
 	const chrome = (scrollable: boolean) => head.length + 1 + foot(scrollable).length + 1;
 	let viewport = body.length;
 	if (view.maxRows !== undefined && body.length + chrome(false) > view.maxRows) {
-		// On a short terminal the summary makes room for the body first.
+		// On a short terminal the summary makes room for the body first: it shrinks to two lines, then goes.
+		summary = summaryRows(true);
+		head = [top, ...summary];
 		if (summary.length && view.maxRows - chrome(true) < MIN_VIEWPORT) head = [top];
 		viewport = Math.min(body.length, Math.max(1, view.maxRows - chrome(true)));
 	}
