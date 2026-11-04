@@ -51,6 +51,18 @@ export const PLAN_DIR_FLAG = "architect-plan-dir";
 export const SUBCOMMAND_NAMES = ["board", "review", "plan", "build", "reset"] as const;
 type Subcommand = (typeof SUBCOMMAND_NAMES)[number];
 
+/** The column `pi --help` starts flag descriptions at: it pads `  --name <value>` to this width. */
+export const HELP_COLUMN = 30;
+
+/**
+ * A flag description that `pi --help` keeps apart from the flag. Pi pads the flag to 30 columns without a
+ * space after it, so a flag of 28 columns or more would run into its description.
+ */
+export function flagHelp(name: string, type: "boolean" | "string", text: string): string {
+	const flag = `  --${name}${type === "string" ? " <value>" : ""}`;
+	return flag.length >= HELP_COLUMN - 1 ? ` ${text}` : text;
+}
+
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
 /** Tools architect mode turns off. */
@@ -320,11 +332,15 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	}
 
 	pi.registerFlag(FLAG, {
-		description: "Start in architect mode: design a feature before building it",
+		description: flagHelp(FLAG, "boolean", "Start in architect mode: design a feature before building it"),
 		type: "boolean",
 	});
 	pi.registerFlag(PLAN_DIR_FLAG, {
-		description: `Where approved plans are written, relative to the working directory (default ${DEFAULT_PLAN_DIR})`,
+		description: flagHelp(
+			PLAN_DIR_FLAG,
+			"string",
+			`Where approved plans are written, relative to the working directory (default ${DEFAULT_PLAN_DIR})`,
+		),
 		type: "string",
 	});
 

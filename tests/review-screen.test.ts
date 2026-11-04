@@ -310,6 +310,15 @@ describe("phase review screens", () => {
 		);
 	});
 
+	it("Slice keeps the rail to the next slice on wrapped lines too", () => {
+		const lines = screen("slice", { ...fullArchitecture(), phase: "slice" }).lines(60);
+		const start = lines.findIndex((l) => l.includes("● s1"));
+		const end = lines.findIndex((l, i) => i > start && l.includes("▼"));
+		const block = lines.slice(start + 1, end);
+		assert.ok(block.length > 6, "long enough to wrap");
+		for (const line of block) assert.match(line, /^│ {2}│/, line);
+	});
+
 	it("Blueprint shows the whole design on one page, and where approving writes the plan", () => {
 		const s = screen("blueprint", ARCH, 200);
 		const t = s.lines(100).join("\n");

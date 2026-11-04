@@ -2,6 +2,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
+import { flagHelp, HELP_COLUMN, PLAN_DIR_FLAG } from "../src/index.ts";
 import { phaseGuidance } from "../src/prompt.ts";
 import { harness } from "./harness.ts";
 
@@ -37,5 +38,25 @@ describe("tool text matches the schemas", () => {
 	it("the README names every architect tool", () => {
 		const readme = readFileSync(new URL("../README.md", import.meta.url), "utf8");
 		for (const name of Object.keys(harness().tools)) assert.ok(readme.includes(`\`${name}\``), `README misses ${name}`);
+	});
+});
+
+describe("pi --help", () => {
+	// Pi's printHelp: `  --${name}${value}`.padEnd(30) + description.
+	const helpLine = (name: string, flag: { type: string; description: string }) =>
+		`  --${name}${flag.type === "string" ? " <value>" : ""}`.padEnd(HELP_COLUMN) + flag.description;
+
+	it("keeps every flag apart from its description", () => {
+		const h = harness();
+		for (const [name, flag] of Object.entries(h.flags) as [string, { type: string; description: string }][]) {
+			const line = helpLine(name, flag);
+			assert.match(line, /^ {2}--\S+( <value>)? +\S/, line);
+		}
+		assert.match(helpLine(PLAN_DIR_FLAG, h.flags[PLAN_DIR_FLAG] as never), /--architect-plan-dir <value> Where/);
+	});
+
+	it("adds no space for a flag that is short enough", () => {
+		assert.equal(flagHelp("architect", "boolean", "Start"), "Start");
+		assert.equal(flagHelp("architect-plan-dir", "string", "Where"), " Where");
 	});
 });
