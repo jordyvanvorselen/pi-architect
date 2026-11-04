@@ -255,6 +255,19 @@ describe("phase review screens", () => {
 		assert.equal((t.match(/todo\.ts/g) ?? []).length, 1);
 	});
 
+	it("keeps the slash of a folder module that has no files yet", () => {
+		const arch = {
+			...ARCH,
+			modules: [
+				{ path: "test/", role: "new" as const, files: [] },
+				{ path: "src/todo.ts", role: "touched" as const, files: [] },
+			],
+		};
+		const t = text("explore", 80, arch);
+		assert.match(t, /\+ test\//);
+		assert.match(t, /● src\/todo\.ts\s/);
+	});
+
 	it("Decide shows each decision with the choice, the comment and the rejected options", () => {
 		const t = text("decide");
 		assert.match(t, /DECISIONS +3 decided · 1 open/);
