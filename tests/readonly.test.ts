@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { checkReadOnly } from "../src/readonly/commands.ts";
-import { blockReason } from "../src/readonly/index.ts";
+import { allowedInArchitect, blockReason } from "../src/readonly/index.ts";
 import { parseCommandLine } from "../src/readonly/shell.ts";
 import { ATTACKS, LEGIT } from "./readonly-cases.ts";
 
@@ -181,6 +181,13 @@ describe("regressions from the review", () => {
 		blocked("rg --hostn=sh x", /rg --hostn/);
 		blocked("npm ls --glo", /write the full option name/);
 	});
+
+	it("refuses tools that are not read-only in architect mode", () => {
+		for (const tool of ["edit", "write", "powershell", "subagent", "web_fetch", "mcp", "todo_write", "ask_question"])
+			assert.match(blockReason(tool, {})!, /off in architect mode.*\/architect build/, tool);
+		for (const tool of ["read", "grep", "find", "ls", "bash", "architect_update", "architect_decide"])
+			assert.ok(allowedInArchitect(tool), tool);
+	});
 });
 
 describe("attacks", () => {
@@ -208,14 +215,18 @@ describe("reasons", () => {
 		blocked("awk '$1 > 5' f", /compare with < instead of >/);
 	});
 
-	it("blocks edit, write and powershell with a hint", () => {
-		assert.match(blockReason("edit", {})!, /edit is off in architect mode.*\/architect build/);
+	it("blocks edit, write, powershell and unknown tools with a hint", () => {
+		assert.match(blockReason("edit", {})!, /edit is off in architect mode.*Describe the change.*\/architect build/);
 		assert.match(blockReason("write", {})!, /write is off/);
-		assert.match(blockReason("powershell", {})!, /powershell is off/);
+		assert.match(blockReason("powershell", {})!, /powershell is off.*Use read, grep, find, ls/);
+		assert.match(blockReason("web_search", {})!, /web_search is off in architect mode/);
 	});
 
-	it("passes other tools and read-only bash", () => {
+	it("passes read-only tools and read-only bash, and blocks bash without a command", () => {
 		assert.equal(blockReason("read", { path: "x" }), undefined);
+		assert.equal(blockReason("grep", { pattern: "x" }), undefined);
+		assert.equal(blockReason("architect_update", {}), undefined);
 		assert.equal(blockReason("bash", { command: "ls" }), undefined);
+		assert.match(blockReason("bash", {})!, /bash needs a command/);
 	});
 });
