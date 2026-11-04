@@ -111,7 +111,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-- ←/→, tab and 1–4 move between options. Focus starts on the recommendation. ↵ chooses. `b` opens the board.
+- ←/→ or ↑/↓, tab and shift+tab, and 1–4 move between options. Focus starts on the recommendation. ↵ chooses. `b` opens the board.
 - `c` chooses with a comment, `n` writes an own option, `?` asks a question instead. Each opens an editor inside the card.
 - esc closes the card without a choice, which stops the agent, so it asks first: `Close without choosing? The agent will stop.  ↵ close  esc back`.
 - Four options sit two by two when a row does not fit. On narrow or short terminals the options fold into a list with the focused one open.
@@ -133,7 +133,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Slice     | The slices in build order, with arrows, files, steps and verify       |
 | Blueprint | Everything on one page, and the path the plan file will be written to |
 
-Long screens scroll with ↑/↓, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
+Long screens scroll with ↑/↓ or j/k, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
 
 esc closes the screen, but first asks in the bottom bar: `Close without a verdict? The agent will stop.  ↵ close  esc back`.
 A closed review tells the agent the user closed it, and the agent stops. `/architect review` opens the same review again, with the agent's summary.
@@ -204,7 +204,7 @@ It has seven tabs: **Brief · Explore · Decisions · Diagrams · Risks · Slice
 
 Keys: 1–7, tab and shift+tab, or ←/→ switch tabs. ↑/↓ or j/k move between items and scroll through a long one.
 PgUp/PgDn, space, Home/End and g/G scroll. ↵ opens an item, `e` opens or closes every item on the tab.
-esc steps back from a diagram and closes the board. q does the same.
+esc steps back from a diagram and closes the board. q does the same. backspace only steps back.
 
 Mouse, in Pi's fullscreen mode: click a tab to open it, click an item to select it, click it again or double-click to open it.
 The wheel scrolls, and shift+wheel scrolls a diagram sideways.
