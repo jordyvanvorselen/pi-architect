@@ -1,5 +1,5 @@
 import { buildBlueprint } from "../../plan/blueprint.ts";
-import { lineWidth, sp, wrapAfter, type Line, type Span } from "../spans.ts";
+import { lineWidth, pathAfter, sp, wrapAfter, type Line, type Span } from "../spans.ts";
 import { bullets, halves, pair, paragraph, risks, section, trim, type ReviewBody } from "./common.ts";
 import { decisionLines } from "./decide.ts";
 import { diagramLines } from "./diagram.ts";
@@ -52,7 +52,7 @@ export const blueprintBody: ReviewBody = (arch, width, paint, request) => {
 	const lines: Line[] = [];
 	lines.push(...wrapAfter([sp("▣ ", "success")], bp.feature || "Unnamed feature", width, "text", true));
 	if (request.planPath)
-		lines.push(...wrapAfter([sp("  Approving writes ", "muted")], request.planPath, width, "accent"));
+		lines.push(...pathAfter([sp("  Approving writes ", "muted")], request.planPath, width, "accent", 4));
 	lines.push(...summary(bp.counts, width).map((l) => [sp("  "), ...l]), []);
 
 	const brief = section(

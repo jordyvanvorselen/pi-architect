@@ -2,7 +2,20 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { editorTheme } from "../src/ui/inline-editor.ts";
 import { meter } from "../src/ui/meter.ts";
-import { box, clipLine, edge, fitLine, lineWidth, paintLine, raw, sp, wrap, wrapAfter } from "../src/ui/spans.ts";
+import {
+	box,
+	clipLine,
+	edge,
+	fitLine,
+	lineWidth,
+	middleTruncate,
+	paintLine,
+	pathAfter,
+	raw,
+	sp,
+	wrap,
+	wrapAfter,
+} from "../src/ui/spans.ts";
 import { plainTheme, tagTheme } from "./helpers.ts";
 
 const text = (line: ReturnType<typeof sp>[]) => paintLine(line, plainTheme);
@@ -28,6 +41,34 @@ describe("spans", () => {
 			["+ ", "one", "two"],
 			"too little room after the prefix wraps under it",
 		);
+	});
+
+	it("break a path that does not fit after a slash, not inside a name", () => {
+		assert.deepEqual(wrap("in docs/plans/todo-item-mutations.md", 20), [
+			"in",
+			"docs/plans/",
+			"todo-item-mutations.",
+			"md",
+		]);
+		const lines = (path: string, total: number) =>
+			pathAfter([sp("  Approving writes ")], path, total, "accent", 4).map(text);
+		assert.deepEqual(lines("docs/plans/x.md", 40), ["  Approving writes docs/plans/x.md"]);
+		assert.deepEqual(lines("docs/plans/todo-item-mutations.md", 40), [
+			"  Approving writes ",
+			"    docs/plans/todo-item-mutations.md",
+		]);
+		assert.deepEqual(lines("docs/plans/todo-item-mutations.md", 26), [
+			"  Approving writes ",
+			"    docs/plans/",
+			"    todo-item-mutations.md",
+		]);
+		assert.deepEqual(lines("docs/plans/todo-item-mutations.md", 20), [
+			"  Approving writes ",
+			"    docs/plans/",
+			"    todo-ite…ions.md",
+		]);
+		assert.equal(middleTruncate("abcdefghij", 5), "ab…ij");
+		assert.equal(middleTruncate("abc", 5), "abc");
 	});
 
 	it("draw edges that drop labels when they do not fit", () => {

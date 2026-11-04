@@ -679,6 +679,24 @@ describe("board mouse", () => {
 });
 
 describe("board layout", () => {
+	it("keeps the plan path whole on a 60-column Plan tab, on its own line when it must", () => {
+		const data = { ...architect(), planTarget: "docs/plans/todo-item-mutations.md" };
+		const text = board(data, { columns: 60, rows: 30, tab: "plan" }).lines().join("\n");
+		assert.match(text, /Approving the Blueprint writes +[│┃]\n│ +docs\/plans\/todo-item-mutations\.md +[│┃]/);
+		const written = board(
+			{
+				...data,
+				plan: { path: "docs/plans/todo-item-mutations-for-every-panel.md", feature: "x", slug: "x", at: 1 },
+				planText: "# Plan\n",
+			},
+			{ columns: 60, rows: 30, tab: "plan" },
+		);
+		assert.match(
+			written.lines().join("\n"),
+			/Plan file +[│┃]\n│ +docs\/plans\/todo-item-mutations-for-every-panel\.md/,
+		);
+	});
+
 	it("fits every line on every tab at widths 30 to 200 and heights 10 to 40, with the height it has", () => {
 		const data = architect(sliceArch({ diagrams: [...sliceArch().diagrams, WIDE] }));
 		for (const columns of [30, 40, 80, 120, 200])
