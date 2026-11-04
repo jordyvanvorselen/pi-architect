@@ -209,7 +209,7 @@ The wheel scrolls, and shift+wheel scrolls a diagram sideways.
 ### Comments from the board
 
 The board is where the user co-architects. Select anything (a brief field, a finding, a decision, a diagram, a risk, a slice or the plan) and press `c`.
-An editor opens at the bottom. ↵ saves the comment, esc cancels.
+An editor opens at the bottom: `↵ save  shift+↵ new line  esc back`, worded like the editors on the card and the review screens. esc keeps the text for the next `c` on that item.
 
 - A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3`.
 - `c` on an item with a comment edits it. Saving it empty or pressing `x` removes it. `m` jumps to the next comment, on any tab. Clicking an item in the bottom edge jumps to it.

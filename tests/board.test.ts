@@ -472,7 +472,7 @@ describe("board comments", () => {
 		assert.equal(b.screen.state.editing, "decision:q2");
 		let text = b.lines().join("\n");
 		assert.match(text, /├─ ✎ Comment on q2 {2}How long do dedup keys stay unique\? ─+┤/);
-		assert.match(text, /↵ save {2}shift\+↵ new line {2}esc cancel/);
+		assert.match(text, /↵ save {2}shift\+↵ new line {2}esc back/);
 		b.press(...type("Per day is fine"), KEYS.enter);
 		assert.equal(b.screen.state.editing, undefined);
 		text = b.lines().join("\n");
@@ -543,12 +543,14 @@ describe("board comments", () => {
 		assert.match(at(30), /│ Send 2\? {2}↵ {2}d {2}esc +│/);
 	});
 
-	it("edits a comment, removes it with x or by saving it empty, and cancels with esc", () => {
+	it("edits a comment, removes it with x or by saving it empty, and steps back with esc keeping the text", () => {
 		const b = board(architect(), { tab: "risks" });
 		b.press("c", ...type("watch this"), KEYS.escape);
-		assert.equal(b.screen.state.comments.length, 0, "esc cancels");
+		assert.equal(b.screen.state.comments.length, 0, "esc saves nothing");
 		assert.equal(b.screen.focused, true);
 		b.press("c");
+		assert.match(b.lines().join("\n"), /watch this/, "the text is back on the next c");
+		b.press(...Array.from({ length: 10 }, () => "\x7f"));
 		b.screen.focused = false;
 		assert.equal(b.screen.focused, false);
 		b.screen.focused = true;
