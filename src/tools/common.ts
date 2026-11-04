@@ -3,7 +3,7 @@
 import { Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import type { EventInput } from "../state/events.ts";
-import { PHASE_LABEL, type Phase } from "../state/phases.ts";
+import { PHASE_LABEL, phaseIndex, type Phase } from "../state/phases.ts";
 import type { ArchitectState, Architecture } from "../state/types.ts";
 
 /** A list of strings in a tool schema. */
@@ -28,6 +28,22 @@ export const clean = (items: readonly string[] | undefined): string[] =>
 /** The text parts of a tool result, joined. */
 export const textOf = (content: readonly { type: string; text?: string }[]) =>
 	content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("\n");
+
+/**
+ * The architect tools the model gets for an architecture, in the order it gets them. Every request carries
+ * the schemas of the active tools, so a tool is only on in the phases where it works: update and advance
+ * always, decide in Decide, diagram from Explore on and slice in Slice and Blueprint. Once the plan is
+ * final nothing changes it, so only update and advance stay, to explain that.
+ */
+export function phaseTools(arch: Architecture | undefined): string[] {
+	const tools = ["architect_update", "architect_advance"];
+	if (!arch || arch.approvedAt !== undefined) return tools;
+	const at = phaseIndex(arch.phase);
+	if (arch.phase === "decide") tools.push("architect_decide");
+	if (at >= phaseIndex("explore")) tools.push("architect_diagram");
+	if (at >= phaseIndex("slice")) tools.push("architect_slice");
+	return tools;
+}
 
 /** What every architect tool reads and writes. */
 export interface ToolDeps {

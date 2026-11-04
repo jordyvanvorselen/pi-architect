@@ -202,12 +202,7 @@ const same = (a: Slice, b: Slice) => JSON.stringify(a) === JSON.stringify(b);
  * Turn tool input into one `slices` event that replaces the list, and a short result with the build order.
  * Pure. Throws with every problem when the slices are not buildable as given.
  */
-export function planSlices(
-	arch: Architecture,
-	input: SliceInput,
-	has: (tool: string) => boolean = () => true,
-	rejections?: Rejections,
-): SlicePlan {
+export function planSlices(arch: Architecture, input: SliceInput, rejections?: Rejections): SlicePlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
 	if (!SLICE_PHASES.includes(phase))
@@ -250,7 +245,7 @@ export function planSlices(
 	const order = buildOrder(slices);
 	const groups: string[][] = [];
 	for (const o of order) (groups[o.step - 1] ??= []).push(o.slice.id);
-	const gaps = missing({ ...arch, slices }, has);
+	const gaps = missing({ ...arch, slices });
 	const steps = groups.map((g, i) => `${i + 1}. ${g.join(" + ")}`).join(" → ");
 	const next = readiness(phase, gaps);
 	const parallel = groups.some((g) => g.length > 1) ? " Slices joined by + can be built in parallel." : "";
@@ -271,7 +266,7 @@ export function planSlices(
 }
 
 /** Register `architect_slice`. Inactive by default, like every architect tool; architect mode turns it on. */
-export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (tool: string) => boolean }): void {
+export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps): void {
 	const rejections = new Rejections();
 	pi.registerTool({
 		name: "architect_slice",
@@ -288,7 +283,7 @@ export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (to
 		defaultActive: false,
 		prepareArguments: prepareSliceArgs,
 		async execute(_toolCallId, params) {
-			const plan = planSlices(architecture(deps.state(), "architect_slice"), params, deps.has, rejections);
+			const plan = planSlices(architecture(deps.state(), "architect_slice"), params, rejections);
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
 		},

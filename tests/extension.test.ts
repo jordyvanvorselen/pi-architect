@@ -477,6 +477,54 @@ describe("architect_update", () => {
 	});
 });
 
+describe("tools per phase", () => {
+	const architectTools = (h: ReturnType<typeof harness>) => h.active().filter((n) => n.startsWith("architect_"));
+	const ev = (data: Record<string, unknown>) => ({ type: "custom", customType: ENTRY_TYPE, data: { v: 1, ...data } });
+	const upTo = (phases: string[]) => [
+		ev({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
+		ev({ type: "mode", mode: "architect", at: 1 }),
+		...phases.map((phase) => ev({ type: "verdict", phase, verdict: "approved", at: 2 })),
+	];
+
+	it("turns on only the tools of the current phase when a session loads", async () => {
+		const phases = ["frame", "explore", "decide", "design", "slice", "blueprint"];
+		const expected = [
+			["architect_update", "architect_advance"],
+			["architect_update", "architect_advance", "architect_diagram"],
+			["architect_update", "architect_advance", "architect_decide", "architect_diagram"],
+			["architect_update", "architect_advance", "architect_diagram"],
+			["architect_update", "architect_advance", "architect_diagram", "architect_slice"],
+			["architect_update", "architect_advance", "architect_diagram", "architect_slice"],
+			["architect_update", "architect_advance"],
+		];
+		for (const [i, tools] of expected.entries()) {
+			const h = harness({ ui: new FakeUi(), branch: upTo(phases.slice(0, i)) });
+			await h.fire("session_start", { reason: "resume" });
+			assert.deepEqual(architectTools(h), tools, phases[i] ?? "approved");
+		}
+	});
+
+	it("switches the tools as soon as a phase is approved, in the middle of a run", async () => {
+		const ui = new FakeUi().keys([KEYS.enter], [KEYS.enter]);
+		const h = await architecting(ui);
+		assert.deepEqual(architectTools(h), ["architect_update", "architect_advance"]);
+		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
+		await h.call("architect_advance", {});
+		assert.deepEqual(architectTools(h), ["architect_update", "architect_advance", "architect_diagram"]);
+		await h.call("architect_update", { modules: [{ path: "src", role: "touched" }] });
+		await h.call("architect_advance", {});
+		assert.ok(architectTools(h).includes("architect_decide"));
+		assert.ok(!h.active().includes("edit"));
+	});
+
+	it("does not touch the tools for content that leaves the phase as it is", async () => {
+		const h = await architecting();
+		const changes = h.activeHistory.length;
+		await h.call("architect_update", { feature: "Dedupe", risks: [{ text: "ordering" }] });
+		assert.equal(h.activeHistory.length, changes);
+	});
+});
+
 describe("architect_advance", () => {
 	it("explains what is missing without bothering the user", async () => {
 		const h = await architecting();

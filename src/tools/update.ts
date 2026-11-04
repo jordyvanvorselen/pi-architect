@@ -135,11 +135,7 @@ const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ?
  * Turn tool input into one update event plus a short result for the model. Pure.
  * Throws with a message for the model when the input does not fit the current phase.
  */
-export function planUpdate(
-	arch: Architecture,
-	input: UpdateInput,
-	has: (tool: string) => boolean = () => true,
-): UpdatePlan {
+export function planUpdate(arch: Architecture, input: UpdateInput): UpdatePlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
 	const index = phaseIndex(phase);
@@ -262,7 +258,7 @@ export function planUpdate(
 	if (!changes.length) throw new Error("Nothing to update. Give feature, brief, modules, findings, risks or remove.");
 
 	const after = applyPreview(arch, update);
-	const gaps = missing(after, has);
+	const gaps = missing(after);
 	return {
 		event: update,
 		text: `Updated ${changes.join(", ")}. ${readiness(phase, gaps)}`,
@@ -284,7 +280,7 @@ function applyPreview(arch: Architecture, update: Omit<UpdateEvent, "v">): Archi
 }
 
 /** Register `architect_update`. Inactive by default, like every architect tool; architect mode turns it on. */
-export function registerUpdateTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (tool: string) => boolean }): void {
+export function registerUpdateTool(pi: ExtensionAPI, deps: ToolDeps): void {
 	pi.registerTool({
 		name: "architect_update",
 		label: "Architect update",
@@ -300,7 +296,7 @@ export function registerUpdateTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (t
 		defaultActive: false,
 		prepareArguments: prepareUpdateArgs,
 		async execute(_toolCallId, params) {
-			const plan = planUpdate(architecture(deps.state(), "architect_update"), params, deps.has);
+			const plan = planUpdate(architecture(deps.state(), "architect_update"), params);
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
 		},

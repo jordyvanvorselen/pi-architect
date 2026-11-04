@@ -58,7 +58,7 @@ describe("tool registration", () => {
 		} as never;
 		const deps = { state: () => INITIAL_STATE, append: () => {} };
 		registerUpdateTool(pi, deps);
-		registerAdvanceTool(pi, { ...deps, review: async () => undefined, now: () => 1, has: () => true });
+		registerAdvanceTool(pi, { ...deps, review: async () => undefined, now: () => 1 });
 		registerDiagramTool(pi, deps);
 		registerDecideTool(pi, { ...deps, ui: async () => undefined });
 		registerSliceTool(pi, deps);

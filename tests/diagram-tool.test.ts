@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { diagramMaxWidth, GUIDE_EXAMPLE } from "../src/diagram/index.ts";
-import { architectSection } from "../src/prompt.ts";
-import { event } from "../src/state/events.ts";
+import { architectSection, DRAWING_RULES_HEAD, drawingRulesInContext, SECTION } from "../src/prompt.ts";
+import { ENTRY_TYPE, event } from "../src/state/events.ts";
 import { PHASES, type Phase } from "../src/state/phases.ts";
 import { newArchitecture, reduce } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
 import { type DiagramDetails, planDiagram, prepareDiagramArgs } from "../src/tools/diagram.ts";
 import { diagramCall, diagramResult } from "../src/ui/diagram.ts";
 import { harness } from "./harness.ts";
-import { FakeUi, plainTheme } from "./helpers.ts";
+import { FakeUi, KEYS, plainTheme } from "./helpers.ts";
 
 const BOX = "╭───────╮\n│ Panel │\n╰───────╯";
 const BROKEN = "╭──────╮\n│ Orders │\n╰──────╯";
@@ -177,8 +177,8 @@ describe("diagram tool rendering", () => {
 });
 
 describe("drawing rules in the prompt", () => {
-	const section = (phase: Phase, has = (_: string) => true) =>
-		architectSection({ mode: "architect", architecture: at({ phase }) }, has) ?? "";
+	const section = (phase: Phase, drawingRulesInContext = false) =>
+		architectSection({ mode: "architect", architecture: at({ phase }) }, { drawingRulesInContext }) ?? "";
 
 	it("come with Explore and Design, where diagrams are drawn", () => {
 		for (const phase of PHASES) {
@@ -189,10 +189,61 @@ describe("drawing rules in the prompt", () => {
 		assert.match(section("explore"), /Sketch the current architecture with architect_diagram/);
 	});
 
-	it("stay out when the tool is missing", () => {
-		const without = (name: string) => name !== "architect_diagram";
-		assert.doesNotMatch(section("design", without), /Drawing diagrams|architect_diagram/);
-		assert.doesNotMatch(section("explore", without), /Drawing diagrams|architect_diagram/);
+	it("stay out when the architect_advance result that opened the phase already brought them", () => {
+		assert.doesNotMatch(section("design", true), /Drawing diagrams/);
+		assert.match(section("design", true), /architect_diagram/);
+	});
+});
+
+describe("drawing rules sent once per phase", () => {
+	const verdict = (phase: Phase) => ({
+		type: "custom",
+		customType: ENTRY_TYPE,
+		data: { v: 1, type: "verdict", phase, verdict: "approved", at: 2 },
+	});
+	const advanced = (next: Phase, text: string, id = "r1") => ({
+		type: "message",
+		id,
+		message: {
+			role: "toolResult",
+			toolName: "architect_advance",
+			content: [{ type: "text", text }],
+			details: { next },
+		},
+	});
+	const rules = `Decide approved. Now in Design:\n${DRAWING_RULES_HEAD}\n…`;
+
+	it("counts as sent when the architect_advance result that opened the phase brought them", () => {
+		assert.equal(drawingRulesInContext([verdict("decide"), advanced("design", rules)], "design"), true);
+		assert.equal(drawingRulesInContext([verdict("decide")], "design"), false);
+		assert.equal(drawingRulesInContext([verdict("decide"), advanced("design", "no rules")], "design"), false);
+		// A result from an earlier architecture does not count for the phase opened since.
+		assert.equal(drawingRulesInContext([advanced("design", rules), verdict("decide")], "design"), false);
+	});
+
+	it("counts as gone once a compaction dropped the result", () => {
+		const entries = [verdict("decide"), advanced("design", rules, "r1"), { type: "message", id: "m2" }];
+		const compaction = (firstKeptEntryId: string) => ({ type: "compaction", id: "c", firstKeptEntryId });
+		assert.equal(drawingRulesInContext([...entries, compaction("m2")], "design"), false);
+		assert.equal(drawingRulesInContext([...entries, compaction("r1")], "design"), true);
+	});
+
+	it("leaves them out of the system prompt after the advance result brought them", async () => {
+		const ui = new FakeUi().keys([KEYS.enter]);
+		const h = harness({ ui });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
+		const result = await h.call("architect_advance", {});
+		assert.match(result.content[0]!.text, new RegExp(DRAWING_RULES_HEAD));
+		assert.match((await h.startRun()).sections[SECTION]!, new RegExp(DRAWING_RULES_HEAD));
+		h.branch.push({
+			type: "message",
+			message: { role: "toolResult", toolName: "architect_advance", content: result.content, details: result.details },
+		} as never);
+		const section = (await h.startRun()).sections[SECTION]!;
+		assert.doesNotMatch(section, /Drawing diagrams/);
+		assert.match(section, /Phase 2\/6: Explore/);
 	});
 });
 
