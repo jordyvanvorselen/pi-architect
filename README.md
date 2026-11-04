@@ -23,8 +23,8 @@ This switches the session to architect mode and starts the agent on Frame.
 
 Each Pi session has a mode. **Build** is normal Pi and the default. **Architect** is read-only:
 
-- Edit and write are off.
-- Bash only runs read-only commands. `ls && rm x`, `echo x > file` and `$(…)` are blocked, and the agent is told why.
+- Only read-only tools run: read, grep, find, ls, bash and the architect tools. Edit, write and tools from other extensions are blocked.
+- Bash only runs read-only commands. `ls && rm x`, `echo x > file`, `$(…)`, `$HOME` and `sed -i` are blocked, and the agent is told why. See [Read-only bash](#read-only-bash).
 - The agent records the design with `architect_update`.
 - The agent draws components, data flow and sequences as Unicode diagrams with `architect_diagram`. Each diagram is checked for alignment before you see it, with `[new]`, `[changed]` and `[removed]` parts highlighted.
 - The agent raises each open question with `architect_decide`. A decision card shows the options side by side. You pick one, add a comment, write your own option or ask a question first.
@@ -68,6 +68,19 @@ In build mode the board is read-only, for reading the approved design. So is the
 The footer always shows the mode. In architect mode a stepper above the editor shows the phases, open decisions and risks.
 
 The mode and the design live in the session. They survive reload and resume. Fork the session to try another answer.
+
+## Read-only bash
+
+In architect mode every bash command is checked before it runs. The check fails closed: anything it does not know is blocked.
+
+- Every command in a chain or pipeline must be on an allowlist of commands that only read, like `ls`, `cat`, `grep`, `rg`, `find`, `git log`, `gh pr view` and `npm ls`.
+- Commands that can also write or run programs only get the options on their own allowlist. `find -exec`, `sort -o`, `git -c`, `curl -o` and `gh api -X DELETE` are blocked.
+- Long options must be written in full. GNU tools read `--outp` as `--output`.
+- Words must be literal, so the checker sees what bash runs. `$` in any form, backticks, `{a,b}`, `~user` and variable assignments are blocked. Put text with `$` in single quotes.
+- Unquoted globs like `src/*.ts` only work where they can only match file names, never options.
+- Output can only go to `/dev/null`. Here-documents, subshells and background jobs are blocked.
+
+The check is a parser, not a sandbox. Tools still read their own config, and git can run programs that a repository's config names. Run Pi in a sandbox if you need a hard guarantee.
 
 ## What works so far
 

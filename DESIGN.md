@@ -264,11 +264,18 @@ The completion lists the subcommands with a short description, and `open`, `writ
 
 ## Read-only in architect mode
 
-- Edit and write tools are off. A call that gets through anyway is blocked with a reason.
-- Bash runs only allowlisted read-only commands. Every command in a chain or pipeline must pass.
-  Output redirection to files, command substitution, subshells, here-documents and background jobs are blocked.
-  Commands that can also write, like `git`, `sed`, `find` and `sort`, are checked argument by argument.
-- A blocked call tells the model why, so it can pick a read-only way.
+- Edit and write tools are off. Tools are an allowlist: read, grep, find, ls, bash and `architect_*`. Any other tool call, including tools from other extensions, is blocked with a reason that names the allowed tools and `/architect build`.
+- Bash runs only allowlisted read-only commands. Every command in a chain or pipeline must pass. The check fails closed.
+- Words must be literal. The lexer refuses anything bash would expand before the command runs: `$` in any form (variables, `$(…)`, `$'…'`, `$"…"`), backticks, brace expansion, `~user` and `~` after `=` or `:`, and process substitution. Otherwise `find . {-exec,} sh` or `find . -exec$U sh` would reach bash as `-exec`. Variable assignments, alone or before a command, are refused too.
+- Globs are marked, not refused. A command name can't be a glob. A glob is allowed where a command only takes paths, and only when it starts with a plain character, so it can never match a file named `-exec` or `--output=x`.
+- Commands with options that write or run something get an allowlist of options, not a denylist (`src/readonly/options.ts`). Long options must be written in full: GNU tools and git accept any unambiguous prefix, and only the tool knows its whole option list. A value given as the next word may not look like an option, in case a tool reads the option as a flag.
+- git is checked in three layers (`src/readonly/git.ts`): global options, the subcommand, and its options. `git -c`, `--exec-path`, `ls-remote`, `--output`, `--ext-diff` and `grep -O` are not on the lists.
+- Builtins that evaluate array subscripts are refused: `printf -v` and `test -v` can run `a[$(cmd)]`.
+- Dropped, because they could not be made safe with reasonable effort: `xxd` (writes its second argument), `cloc` (Perl option prefixes, `--report-file`, `--vcs`), `ag` and `ack` (pagers, `.ackrc`), `pnpm` and `yarn` (repository hooks and `yarnPath`), `cargo` (repository config runs programs). Runtimes like `node` and `python` only print their version.
+- Output redirection goes only to `/dev/null`. Here-documents, subshells and background jobs are blocked.
+- A blocked call tells the model why, so it can pick a read-only way, often with the alternative: "use the read tool", "use od or hexdump".
+- This is a parser, not a sandbox. Tools still read their own config and write their own caches, and git runs programs a repository's config names (`core.fsmonitor`, textconv). An OS sandbox such as `sandbox-exec` or `bwrap` would be the next layer.
+- `tests/readonly-bash.test.ts` runs every allowed attack candidate in a real bash, with a canary file and a fake `PATH` whose `sh` and `touch` only log, to prove nothing ran.
 - The only file the extension writes is the plan file, and only after the user approves the Blueprint.
 
 ## State
