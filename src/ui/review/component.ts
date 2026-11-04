@@ -11,7 +11,8 @@ import { renderReview, reviewGeometry, type ReviewMode } from "./screen.ts";
 
 /**
  * The interactive Phase Review screen. ↑/↓ (or j/k), PgUp/PgDn (or space), Home and End scroll; ↵ approves;
- * `r` opens an inline editor for the requested changes; `b` opens the board over the screen. esc steps back
+ * `r` opens an inline editor for the requested changes, where alt+↑/↓ (or alt+j/k) keep scrolling the phase; `b` opens
+ * the board over the screen. esc steps back
  * from the editor. Otherwise it asks first, because closing without a verdict stops the agent: ↵ closes and
  * esc goes back. Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
  * Calls `done` once, with the verdict or undefined.
@@ -82,7 +83,9 @@ export class ReviewScreen implements Component, Focusable {
 
 	handleInput(data: string): void {
 		if (this.editor) {
-			if (matchesKey(data, Key.escape)) {
+			if (matchesKey(data, Key.alt("up")) || matchesKey(data, Key.alt("k"))) this.scrollTo(this.scroll - 1);
+			else if (matchesKey(data, Key.alt("down")) || matchesKey(data, Key.alt("j"))) this.scrollTo(this.scroll + 1);
+			else if (matchesKey(data, Key.escape)) {
 				this.draft = this.editor.text;
 				this.editor = undefined;
 				this.mode = "browse";

@@ -237,6 +237,11 @@ describe("phase review screens", () => {
 		assert.match(t, /DIAGRAMS/);
 		assert.match(t, /Today/);
 		assert.doesNotMatch(t, /Event flow/);
+		const at = (heading: string) => t.indexOf(heading);
+		assert.ok(
+			at("DIAGRAMS") < at("RISKS") && at("RISKS") < at("MODULES") && at("MODULES") < at("FINDINGS"),
+			"the big picture (diagrams, risks) comes before the details (modules, findings)",
+		);
 		const narrow = text("explore", 40);
 		assert.match(narrow, /│ {2}│ {2}events arrive here/, "a long note wraps under its module");
 		assert.match(text("explore", 80, newArchitecture(1)), /no modules yet/);
@@ -442,8 +447,6 @@ describe("phase review screens", () => {
 			() => {},
 		);
 		const t = c.render(100).join("\n");
-		assert.match(t, /<warning>● <\/warning><text><b>ingest\/<\/b><\/text>/);
-		assert.match(t, /<success>\+ <\/success><success><b>dedupe\/<\/b><\/success>/);
 		const tall = new ReviewScreen(
 			{ requestRender() {}, terminal: { rows: 200 } } as never,
 			tagTheme,
@@ -451,10 +454,13 @@ describe("phase review screens", () => {
 			REVIEW_BODIES.explore,
 			() => {},
 		);
-		assert.match(tall.render(100).join("\n"), /<dim>○ <\/dim><muted>api<\/muted>/);
-		assert.doesNotMatch(t, /<borderMuted><\/borderMuted>/, "no empty styles");
+		const all = tall.render(100).join("\n");
+		assert.match(all, /<warning>● <\/warning><text><b>ingest\/<\/b><\/text>/);
+		assert.match(all, /<success>\+ <\/success><success><b>dedupe\/<\/b><\/success>/);
+		assert.match(all, /<dim>○ <\/dim><muted>api<\/muted>/);
+		assert.doesNotMatch(all, /<borderMuted><\/borderMuted>/, "no empty styles");
 		assert.match(t, /<accent>┃<\/accent>/);
-		assert.match(t, /<accent><b>MODULES<\/b><\/accent>/);
+		assert.match(all, /<accent><b>MODULES<\/b><\/accent>/);
 	});
 });
 
@@ -517,6 +523,27 @@ describe("phase review keys", () => {
 		assert.deepEqual(s.answers, []);
 		s.keys(...type(" tighten it "), KEYS.enter);
 		assert.deepEqual(s.answers, [{ verdict: "changes", comment: "tighten it" }]);
+	});
+
+	it("alt+↑↓ and alt+j/k keep scrolling the phase while the editor is open, so the user can reread it", () => {
+		const s = screen("slice", ARCH, 24);
+		s.lines(80);
+		s.keys("r", ...type("first"));
+		assert.match(s.lines(80).join("\n"), /alt\+↑↓ scroll/);
+		s.keys(KEYS.altDown, KEYS.altJ);
+		assert.equal(s.component.state.scroll, 2, "alt+↓ and alt+j scroll down");
+		s.keys(KEYS.altUp);
+		assert.equal(s.component.state.scroll, 1, "alt+↑ scrolls up");
+		s.keys(KEYS.altK);
+		assert.deepEqual(s.component.state, { scroll: 0, mode: "changes" }, "alt+k scrolls up, the editor stays open");
+		s.keys(KEYS.pageDown, KEYS.ctrlJ, ...type("second"));
+		assert.equal(s.component.state.scroll, 0, "PgDn and ctrl+j stay with the editor");
+		s.keys(KEYS.enter);
+		assert.deepEqual(
+			s.answers,
+			[{ verdict: "changes", comment: "first\nsecond" }],
+			"ctrl+j is Pi's new line, so it cannot scroll",
+		);
 	});
 
 	it("esc steps back from the editor keeping the draft, and closes the screen", () => {
