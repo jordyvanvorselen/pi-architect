@@ -59,6 +59,13 @@ const EXPECTED: Record<string, [number, number, "error" | "warning", string][]> 
 	"dangling-arrow.txt": [[5, 5, "warning", "▼ points at nothing"]],
 	"missing-arm.txt": [[4, 5, "warning", "│ runs into ─ above without joining it"]],
 	"crossing-no-junction.txt": [[2, 11, "warning", "─ runs into │ to its right"]],
+	"side-one-off.txt": [[3, 9, "error", "This line's │ is at col 8, 1 col too far left"]],
+	"junction-outside.txt": [[2, 7, "error", "This line's │ is at col 6, 1 col too far left"]],
+	"corner-short.txt": [[3, 8, "error", "╯ is 1 col off: it must be at col 9"]],
+	"bottom-left-off.txt": [[3, 2, "error", "╰ is 1 col off: it must be at col 1"]],
+	"top-short.txt": [[1, 9, "error", "╮ is 1 col off: it must be at col 10"]],
+	"ambiguous-sides.txt": [[4, 10, "error", "╯ is 1 col off"]],
+	"line-into-line.txt": [[2, 2, "warning", "─ runs into │ to its right"]],
 };
 
 describe("diagram linter on broken diagrams", () => {

@@ -87,8 +87,37 @@ describe("validateDiagram", () => {
 
 		const warned = validateDiagram({ title: "t", body: `${BOX}\n    │\n    ▼\n\n╭───────╮\n│ Proc  │\n╰───────╯` });
 		assert.equal(warned.ok, true);
-		assert.equal(warned.warnings, 2);
-		assert.match(warned.summary, /^Diagram accepted with 2 warnings\./);
+		assert.equal(warned.warnings, 1);
+		assert.match(warned.summary, /^Diagram accepted with 1 warning\./);
+		// The line that ran into the box edge got its junction instead of a warning.
+		assert.match(warned.diagram!.body, /╰───┬───╯/);
+	});
+
+	it("repairs a corner one column off, accepts the drawing and says what it changed", () => {
+		const check = validateDiagram({ title: "t", body: "╭───────╮\n│ Panel │\n╰────────╯" });
+		assert.equal(check.ok, true);
+		assert.equal(check.diagram!.body, "╭───────╮\n│ Panel │\n╰───────╯");
+		assert.deepEqual(check.repairs, [
+			{ line: 3, col: 10, message: "moved ╯ from col 10 to col 9, in line with the corner on line 1" },
+		]);
+		assert.equal(
+			check.summary,
+			[
+				"Diagram accepted.",
+				"Repaired 1 alignment slip before showing it. Keep these when you revise it:",
+				"- line 3 col 10: moved ╯ from col 10 to col 9, in line with the corner on line 1.",
+			].join("\n"),
+		);
+	});
+
+	it("lists the repairs it made on a drawing it still rejects", () => {
+		const check = validateDiagram({
+			title: "t",
+			body: "╭───────╮\n│ Panel │\n╰────────╯\n╭──────╮\n│ Orders │\n╰──────╯",
+		});
+		assert.equal(check.ok, false);
+		assert.match(check.summary, /line 5 col 8 error: box side/);
+		assert.match(check.summary, /Repaired 1 alignment slip already; the findings above are for the repaired drawing/);
 	});
 
 	it("suggests the real status markers", () => {

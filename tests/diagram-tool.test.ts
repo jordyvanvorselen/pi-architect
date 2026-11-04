@@ -85,8 +85,18 @@ describe("planDiagram", () => {
 	it("passes warnings on without rejecting", () => {
 		const plan = planDiagram(at(), { title: "t", body: `${BOX}\n    │\n    ▼\n\n╭───────╮\n│ Proc  │\n╰───────╯` });
 		assert.ok(plan.event);
-		assert.match(plan.text, /Warnings, fix them if you revise it: - line 4 col 5 warning: │ runs into ─ above/);
-		assert.equal(plan.details.outcome === "saved" && plan.details.warnings.length, 2);
+		assert.match(plan.text, /Warnings, fix them if you revise it: - line 5 col 5 warning: ▼ stops 1 row short/);
+		assert.equal(plan.details.outcome === "saved" && plan.details.warnings.length, 1);
+	});
+
+	it("tells the model what it repaired, so a revision keeps it", () => {
+		const plan = planDiagram(at(), { title: "t", body: "╭───────╮\n│ Panel │\n╰──────╯" });
+		assert.equal(plan.event!.diagram.body, "╭───────╮\n│ Panel │\n╰───────╯");
+		assert.match(
+			plan.text,
+			/The user sees it on screen\. Repaired 1 alignment slip before showing it\. Keep these when you revise it:\n- line 3 col 8: moved ╯ from col 8 to col 9, in line with the corner on line 1\./,
+		);
+		assert.equal(plan.details.outcome === "saved" && plan.details.repairs.length, 1);
 	});
 
 	it("checks the width it is given", () => {
