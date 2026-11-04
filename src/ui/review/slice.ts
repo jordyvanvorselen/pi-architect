@@ -1,6 +1,6 @@
 import { sliceProblems } from "../../state/queries.ts";
 import type { Slice } from "../../state/types.ts";
-import { clipLine, sp, wrapAfter, type Line } from "../spans.ts";
+import { clipLine, lineWidth, sp, wrapAfter, type Line } from "../spans.ts";
 import { risks, section, trim, type ReviewBody } from "./common.ts";
 
 /** Slices in build order: each after the slices it depends on, otherwise in the agent's order. Cycles go last. */
@@ -24,9 +24,19 @@ export function sliceOrder(slices: readonly Slice[]): Slice[] {
 
 const LABEL_WIDTH = 8;
 
+/** `text` after `prefix`, which starts with the rail, and the rail again on every wrapped line. */
+function railed(rail: Line, prefix: Line, text: string, width: number, color: "text" | "muted"): Line[] {
+	const railWidth = lineWidth(rail);
+	return wrapAfter(prefix, text, width, color).map((line, i) => {
+		const [lead, ...rest] = line;
+		if (i === 0 || !lead || lead.text.trim() || lead.text.length < railWidth) return line;
+		return [...rail, sp(lead.text.slice(railWidth)), ...rest];
+	});
+}
+
 /** `files   a.ts, b.ts` under a slice, behind the rail that links it to the next one. */
 function field(rail: Line, label: string, text: string, width: number, color: "text" | "muted"): Line[] {
-	return wrapAfter([...rail, sp(label.padEnd(LABEL_WIDTH), "dim")], text, width, color);
+	return railed(rail, [...rail, sp(label.padEnd(LABEL_WIDTH), "dim")], text, width, color);
 }
 
 function sliceLines(slice: Slice, linked: boolean, width: number): Line[] {
@@ -35,7 +45,7 @@ function sliceLines(slice: Slice, linked: boolean, width: number): Line[] {
 	const lines: Line[] = [
 		clipLine([sp("● ", "accent"), sp(slice.id, "dim"), sp("  "), sp(slice.title, "text", true), ...deps], width),
 	];
-	if (slice.goal) lines.push(...wrapAfter(rail, slice.goal, width, "muted"));
+	if (slice.goal) lines.push(...railed(rail, rail, slice.goal, width, "muted"));
 	if (slice.files.length) lines.push(...field(rail, "files", slice.files.join(", "), width, "muted"));
 	slice.steps.forEach((step, i) => lines.push(...field(rail, i ? "" : "steps", `${i + 1}. ${step}`, width, "text")));
 	if (slice.verify.length)
