@@ -51,7 +51,10 @@ export function advanceCall(args: Partial<AdvanceInput> | undefined, paint: Pain
 	return title(paint, "advance") + (summary ? `  ${paint.fg("dim", summary)}` : "");
 }
 
-/** The gate's outcome: approved, changes requested, closed, not ready, or no UI. */
+/**
+ * The gate's outcome: closed, not ready, or no UI. Nothing for a verdict: the verdict's own banner follows
+ * in the transcript, `✓ Explore approved → Decide`, so a row here would say it twice.
+ */
 export function advanceResult(
 	details: AdvanceDetails | undefined,
 	text: string,
@@ -61,18 +64,10 @@ export function advanceResult(
 	if (isPartial) return paint.fg("warning", "◉ waiting for your review…");
 	if (!details) return paint.fg("error", `✗ ${text}`);
 	const label = PHASE_LABEL[details.phase];
-	const comment = details.comment ? paint.fg("muted", `  "${details.comment}"`) : "";
 	switch (details.outcome) {
 		case "approved":
-			if (details.final)
-				return (
-					paint.fg("success", `✓ ${label} approved · the plan is final`) +
-					(details.planPath ? paint.fg("dim", ` · ${details.planPath}`) : "") +
-					comment
-				);
-			return paint.fg("success", `✓ ${label} approved`) + paint.fg("dim", ` → ${PHASE_LABEL[details.next!]}`) + comment;
 		case "changes":
-			return paint.fg("warning", `↻ changes requested for ${label}`) + comment;
+			return "";
 		case "closed":
 			return paint.fg("dim", `■ ${label} review closed without a verdict · ${REOPEN_HINT}`);
 		case "not-ready":
