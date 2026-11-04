@@ -56,12 +56,12 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 Put a feature name in quotes to use it as written: `/architect "Build pipeline"`. Every question that discards work starts on No.
 `/architect plan` alone also offers to build the plan in this session or to copy its path.
 
-On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
-On a review screen: ↑/↓, PgUp/PgDn, space, Home and End scroll, ↵ approves, `r` requests changes, `b` opens the board, esc closes.
+On the decision card: ←/→ or ↑/↓, tab and shift+tab, or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
+On a review screen: ↑/↓ or j/k, PgUp/PgDn, space, Home and End scroll, ↵ approves, `r` requests changes, `b` opens the board, esc closes.
 Closing a card or a review without an answer stops the agent, so esc asks first. `/architect review` opens a closed review again.
 
 The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
-Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.
+Switch tabs with 1–7, tab and shift+tab, or ←/→. Move with ↑/↓ or j/k, open an item with ↵, and step back from it with esc or backspace. Press `c` on anything to comment on it.
 When you close the board with comments, it asks whether to send them. ↵ sends them to the agent as one message, with the decision, diagram or slice each one is about. `d` discards them and esc goes back to the board.
 In build mode the board is read-only, for reading the approved design. So is the board you open with `b` from a decision card or review screen. Closing it takes you back to where you were.
 
