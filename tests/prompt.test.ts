@@ -62,7 +62,7 @@ describe("architectSection", () => {
 		assert.match(text, /\nPhase 2\/6: Explore\.\n- Read the code/);
 		assert.match(
 			text,
-			/Rules:\n- Architect mode is read-only: only read, grep, find, ls, read-only bash and the architect tools are on\./,
+			/Rules:\n- Architect mode designs, it does not build\. Change nothing yet: no file edits, no commands that write, and no changes in other systems like tickets or pull requests, unless the user asks for it\..*Put each change in the design instead\./,
 		);
 		assert.doesNotMatch(text, /skip/i);
 		const rules = text.split("\nDrawing diagrams")[0]!;
@@ -86,12 +86,12 @@ describe("mode notices", () => {
 	it("are short and say what changed", () => {
 		assert.equal(
 			modeNotice("architect", at({ phase: "decide" })),
-			"[pi-architect] The user switched to architect mode. It is read-only: only read, grep, find, ls, read-only bash and the architect tools are on. Current phase: Decide.",
+			"[pi-architect] The user switched to architect mode. Architect mode designs, it does not build. Change nothing yet: no file edits, no commands that write, and no changes in other systems like tickets or pull requests, unless the user asks for it. Reading, searching and commands that only look, like running the tests, are fine. Put each change in the design instead. Current phase: Decide.",
 		);
 		assert.doesNotMatch(modeNotice("architect", at({ approvedAt: 1 })), /Current phase/);
 		assert.equal(
 			modeNotice("build", undefined),
-			"[pi-architect] The user switched to build mode. All tools are back and the architect tools are off.",
+			"[pi-architect] The user switched to build mode. You may change files again, and the architect tools are off.",
 		);
 		assert.match(modeNotice("build", at({ approvedAt: 1 })), /Build from the approved plan\.$/);
 	});

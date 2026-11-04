@@ -12,9 +12,7 @@ import {
 	modeToldToModel,
 	SECTION,
 } from "./prompt.ts";
-import { blockReason } from "./readonly/index.ts";
 import type { ArchitectSession } from "./session.ts";
-import { pinSelectedTools } from "./tools-activation.ts";
 
 export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): void {
 	pi.on("session_start", async (event, ctx) => {
@@ -22,12 +20,6 @@ export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): 
 		await session.syncProgress(ctx);
 		if (event.reason === "startup" && pi.getFlag(FLAG) === true && session.state.mode !== "architect")
 			await session.setMode("architect", ctx);
-	});
-
-	// Pi fires this after every session_start handler, also after a reload: a tool another extension turned on
-	// at session start goes off again.
-	pi.on("resources_discover", async () => {
-		if (session.state.mode === "architect") session.applyTools();
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
@@ -55,25 +47,9 @@ export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): 
 		session.shutdown();
 	});
 
-	pi.on("tool_call", async (event) => {
-		if (session.state.mode !== "architect") return;
-		const reason = blockReason(event.toolName, event.input);
-		if (reason) return { block: true, reason };
-	});
-
-	// Tools can register after architect mode started, e.g. MCP tools, also in the middle of a run: turn them
-	// off before each request.
-	pi.on("turn_start", async () => {
-		if (session.state.mode === "architect") session.applyTools();
-	});
-
 	pi.on("before_agent_start", async (event, ctx) => {
 		session.ctx = ctx;
-		if (session.state.mode === "architect") {
-			session.applyTools();
-			// Handlers of extensions that load later run after this one and may turn tools back on.
-			pinSelectedTools(event.systemPromptOptions, pi.getActiveTools());
-		}
+		if (session.state.mode === "architect") session.applyTools();
 		const { state, progress } = session;
 		const sections = event.systemPromptOptions.sections;
 		const section =

@@ -19,12 +19,13 @@ pi install npm:@jordyvanvorselen/pi-architect
 /architect Dedupe panel events
 ```
 
-This switches the session to architect mode and starts the agent on Frame.
+This switches the session to architect mode and names the feature. The agent waits for your first message.
+Give it what it needs to frame the feature, like a ticket link, a description or the files involved.
 
-Each Pi session has a mode. **Build** is normal Pi and the default. **Architect** is read-only:
+Each Pi session has a mode. **Build** is normal Pi and the default. **Architect** is for designing:
 
-- Only read-only tools run: read, grep, find, ls, bash and the architect tools. Edit, write and tools from other extensions are blocked.
-- Bash only runs read-only commands. `ls && rm x`, `echo x > file`, `$(…)`, `$HOME` and `sed -i` are blocked, and the agent is told why. See [Read-only bash](#read-only-bash).
+- The agent is told to change nothing yet. That means no file edits, no commands that write, and no changes to tickets or other systems unless you ask. It puts each change in the design instead.
+- Nothing is blocked. Every tool stays on, including MCP servers, web search and other extensions, so the agent can read a ticket, search the docs or run the tests.
 - The agent records the design with `architect_update`.
 - The agent draws components, data flow and sequences as Unicode diagrams with `architect_diagram`. Each diagram is checked for alignment before you see it, with `[new]`, `[changed]` and `[removed]` parts highlighted.
 - The agent raises each open question with `architect_decide`. A decision card shows the options side by side. You pick one, add a comment, write your own option or ask a question first.
@@ -69,23 +70,9 @@ The footer always shows the mode. In architect mode a stepper above the editor s
 
 The mode and the design live in the session. They survive reload and resume. Fork the session to try another answer.
 
-## Read-only bash
-
-In architect mode every bash command is checked before it runs. The check fails closed: anything it does not know is blocked.
-
-- Every command in a chain or pipeline must be on an allowlist of commands that only read, like `ls`, `cat`, `grep`, `rg`, `find`, `git log`, `gh pr view` and `npm ls`.
-- Commands that can also write or run programs only get the options on their own allowlist. `find -exec`, `sort -o`, `git -c`, `curl -o` and `gh api -X DELETE` are blocked.
-- Long options must be written in full. GNU tools read `--outp` as `--output`.
-- Words must be literal, so the checker sees what bash runs. `$` in any form, backticks, `{a,b}`, `~user` and variable assignments are blocked. Put text with `$` in single quotes.
-- Unquoted globs like `src/*.ts` only work where they can only match file names, never options.
-- Output can only go to `/dev/null`. Here-documents, subshells and background jobs are blocked.
-
-The check is a parser, not a sandbox. Tools still read their own config, and git can run programs that a repository's config names. Run Pi in a sandbox if you need a hard guarantee.
-
 ## What works so far
 
 - Architect and build mode, with the switch in the transcript and in the footer.
-- Read-only mode with a checked bash allowlist.
 - Decision cards, and a review screen for every phase with approve and request changes.
 - Decisions and verdicts as small cards in the transcript.
 - The brief, modules, findings and risks.

@@ -16,10 +16,10 @@ The result is a plan file that another agent can build from without any other co
 
 Every Pi session has a mode: **architect** or **build**. The user sets it. A new session starts in build mode, which is normal Pi.
 
-| Mode      | Tools                                                                                | The agent                                              |
-| --------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| architect | Read-only. Only read, grep, find, ls, read-only bash and the architect tools are on. | Walks through the phases. The user approves each gate. |
-| build     | All normal tools. The architect tools are off.                                       | Builds, from the approved plan if there is one.        |
+| Mode      | Tools                                                                          | The agent                                              |
+| --------- | ------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| architect | Design only. The prompt tells the agent to change nothing. No tool is blocked. | Walks through the phases. The user approves each gate. |
+| build     | All normal tools. The architect tools are off.                                 | Builds, from the approved plan if there is one.        |
 
 - `/architect` switches to architect mode. In architect mode it opens a picker: the board, a review of the phase, the plan, build mode or reset.
 - `/architect build` switches to build mode.
@@ -266,24 +266,12 @@ Quotes name a feature as written: `/architect "Build pipeline"`. Questions that 
 `/architect plan` alone also offers "Build it here", which switches to build mode and asks the agent to build the plan, and "Copy the path".
 The completion lists the subcommands with a short description, and `open`, `write` and `build` after `plan`.
 
-## Read-only in architect mode
+## Design only in architect mode
 
-- Tools are an allowlist: only read, grep, find, ls, bash and `architect_*` are on. Any other tool call, including tools from other extensions, is blocked with a reason that names the allowed tools and `/architect build`.
-  Architect mode also turns every other tool off, so its schema is not sent, and build mode turns exactly those back on.
-  The mode event records which tools it turned off, because the extension starts fresh after a reload, a resume or /tree. A reload keeps the current tools and turns on every extension tool. Only a resume and /tree restore the tool set from the transcript. A tool that turns on later, like an MCP tool that registers late, is turned off at the start of the next turn, also in the middle of a run, and recorded too.
-  Other extensions can turn a tool back on in their own handlers, like pi-web-access with `web_enable`. Pi runs handlers in load order, so architect mode turns tools off again where it runs last: in `resources_discover`, which Pi fires after every `session_start` handler, and through `selectedTools` in `before_agent_start`, which wins over later `setActiveTools` calls for the run.
-- Each architect tool is only on in its phases: `architect_update` and `architect_advance` always, `architect_decide` in Decide, `architect_diagram` from Explore on and `architect_slice` in Slice and Blueprint.
-- Bash runs only allowlisted read-only commands. Every command in a chain or pipeline must pass. The check fails closed.
-- Words must be literal. The lexer refuses anything bash would expand before the command runs: `$` in any form (variables, `$(…)`, `$'…'`, `$"…"`), backticks, brace expansion, `~user` and `~` after `=` or `:`, and process substitution. Otherwise `find . {-exec,} sh` or `find . -exec$U sh` would reach bash as `-exec`. Variable assignments, alone or before a command, are refused too.
-- Globs are marked, not refused. A command name can't be a glob. A glob is allowed where a command only takes paths, and only when it starts with a plain character, so it can never match a file named `-exec` or `--output=x`.
-- Commands with options that write or run something get an allowlist of options, not a denylist (`src/readonly/options.ts`). Long options must be written in full: GNU tools and git accept any unambiguous prefix, and only the tool knows its whole option list. A value given as the next word may not look like an option, in case a tool reads the option as a flag.
-- git is checked in three layers (`src/readonly/git.ts`): global options, the subcommand, and its options. `git -c`, `--exec-path`, `ls-remote`, `--output`, `--ext-diff` and `grep -O` are not on the lists.
-- Builtins that evaluate array subscripts are refused: `printf -v` and `test -v` can run `a[$(cmd)]`.
-- Dropped, because they could not be made safe with reasonable effort: `xxd` (writes its second argument), `cloc` (Perl option prefixes, `--report-file`, `--vcs`), `ag` and `ack` (pagers, `.ackrc`), `pnpm` and `yarn` (repository hooks and `yarnPath`), `cargo` (repository config runs programs). Runtimes like `node` and `python` only print their version.
-- Output redirection goes only to `/dev/null`. Here-documents, subshells and background jobs are blocked.
-- A blocked call tells the model why, so it can pick a read-only way, often with the alternative: "use the read tool", "use od or hexdump".
-- This is a parser, not a sandbox. Tools still read their own config and write their own caches, and git runs programs a repository's config names (`core.fsmonitor`, textconv). An OS sandbox such as `sandbox-exec` or `bwrap` would be the next layer.
-- `tests/readonly-bash.test.ts` runs every allowed attack candidate in a real bash, with a canary file and a fake `PATH` whose `sh` and `touch` only log, to prove nothing ran.
+- The system prompt tells the agent to change nothing: no file edits, no commands that write and no changes in other systems, unless the user asks. The mode notice repeats this when the user enters architect mode.
+- No tool is blocked and no tool is turned off. Users have tools pi-architect does not know, like MCP servers and other extensions, and an allowlist blocked them. Agents follow the instruction well enough, and git undoes a slip.
+- Each architect tool is only on in its phases: `architect_update` and `architect_advance` always, `architect_decide` in Decide, `architect_diagram` from Explore on and `architect_slice` in Slice and Blueprint. Build mode turns them all off.
+- Versions before 0.3 turned off every tool outside a read-only allowlist and checked every bash command. Their mode events record which tools they turned off. Both modes turn those tools back on, so an older session gets them back.
 - The only file the extension writes is the plan file, and only after the user approves the Blueprint.
 
 ## State
@@ -335,13 +323,13 @@ The output is deterministic and stable under prettier.
 
 - It goes to `docs/plans/<slug>.md`, or the directory from `--architect-plan-dir`.
 - It never overwrites a file. A taken name gets `-2`, `-3` and so on.
-- The extension writes it with Node, not through the edit or write tools, so the read-only guard stays as strict.
+- The extension writes it with Node, not through the edit or write tools, so the agent never has to write in architect mode.
 - `architect_slice` rejects duplicate ids, unknown dependencies, cycles, vague steps and slices without a verify command.
 
 ## v1 build order
 
 1. Repository setup: CI, publish workflow, lint, prettier, tsconfig, test harness.
-2. State, modes, phases, read-only mode and the stepper widget.
+2. State, modes, phases and the stepper widget.
 3. Decision card and Phase Review screen.
 4. Unicode diagram renderer, with tests at narrow widths.
 5. Plan file writer and Blueprint screen.

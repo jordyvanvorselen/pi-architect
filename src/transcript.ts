@@ -15,7 +15,7 @@ export function registerEntryRenderer(pi: ExtensionAPI, state: () => ArchitectSt
 		if (e.type === "mode")
 			return new Text(
 				e.mode === "architect"
-					? `${paint.fg("accent", paint.bold("◆ architect mode"))}  ${paint.fg("dim", "read-only · the agent walks through the phases, you approve each one")}`
+					? `${paint.fg("accent", paint.bold("◆ architect mode"))}  ${paint.fg("dim", "design only · the agent walks through the phases, you approve each one")}`
 					: `${paint.fg("muted", paint.bold("▸ build mode"))}  ${paint.fg("dim", "all tools are back")}`,
 				0,
 				0,

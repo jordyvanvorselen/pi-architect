@@ -60,13 +60,11 @@ function position(phase: Phase): string {
 	return `Phase ${phaseIndex(phase) + 1}/${PHASES.length}: ${PHASE_LABEL[phase]}`;
 }
 
-/** Which tools are on in architect mode, for the model. */
-export const ARCHITECT_TOOLS_ON = "only read, grep, find, ls, read-only bash and the architect tools are on";
+/** What the agent may do in architect mode. No tool is blocked, so this rule is the only guard. */
+export const ARCHITECT_RULE =
+	"Architect mode designs, it does not build. Change nothing yet: no file edits, no commands that write, and no changes in other systems like tickets or pull requests, unless the user asks for it. Reading, searching and commands that only look, like running the tests, are fine. Put each change in the design instead";
 
-const RULES = [
-	`Architect mode is read-only: ${ARCHITECT_TOOLS_ON}.`,
-	"The extension shows the design on screen, so keep chat short.",
-];
+const RULES = [`${ARCHITECT_RULE}.`, "The extension shows the design on screen, so keep chat short."];
 
 export interface SectionOptions {
 	/**
@@ -165,10 +163,10 @@ export function drawingRulesInContext(entries: readonly ContextEntry[], phase: P
 export function modeNotice(mode: Mode, arch: Architecture | undefined): string {
 	if (mode === "architect") {
 		const where = arch && arch.approvedAt === undefined ? ` Current phase: ${PHASE_LABEL[arch.phase]}.` : "";
-		return `[pi-architect] The user switched to architect mode. It is read-only: ${ARCHITECT_TOOLS_ON}.${where}`;
+		return `[pi-architect] The user switched to architect mode. ${ARCHITECT_RULE}.${where}`;
 	}
 	const plan = arch?.approvedAt !== undefined ? " Build from the approved plan." : "";
-	return `[pi-architect] The user switched to build mode. All tools are back and the architect tools are off.${plan}`;
+	return `[pi-architect] The user switched to build mode. You may change files again, and the architect tools are off.${plan}`;
 }
 
 /** The mode the model last heard about on this branch. Build until told otherwise. */

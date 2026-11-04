@@ -113,7 +113,7 @@ export interface Review {
 }
 
 /**
- * `architect`: read-only, the agent walks through the phases. `build`: normal Pi.
+ * `architect`: design only, the agent walks through the phases. `build`: normal Pi.
  * The user sets it; it is stored per session.
  */
 export type Mode = "architect" | "build";
@@ -158,8 +158,8 @@ export interface ArchitectState {
 	/** The plan file, once written. A new architecture or a reset keeps it: the file is still there to build. */
 	plan?: PlanRef;
 	/**
-	 * Tools architect mode turned off since the user last entered it. Build mode turns exactly these back on.
-	 * Undefined while the session was never in architect mode, so build mode leaves the tools alone.
+	 * Tools a version before 0.3 turned off in architect mode. Both modes turn them back on. Empty once the user
+	 * enters architect mode with this version, and undefined while the session was never in architect mode.
 	 */
 	turnedOff?: string[];
 }
