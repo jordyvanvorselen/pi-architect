@@ -107,9 +107,25 @@ describe("planDiagram", () => {
 		const rejections = new Rejections();
 		const send = (body: string) => planDiagram(at(), { title: "t", body }, { rejections }).text;
 		assert.doesNotMatch(send(BROKEN), /What passes/);
-		assert.match(send(BROKEN), /The same problem came back\. What passes:\n- A box passes when its top/);
+		assert.match(
+			send(BROKEN),
+			/You made this kind of error in your last attempt too\. What passes:\n- A box passes when its top/,
+		);
 		assert.doesNotMatch(send(BOX), /What passes/);
 		assert.doesNotMatch(send(BROKEN), /What passes/);
+	});
+
+	it("keeps its own repairs apart from what the model still has to fix", () => {
+		const rejections = new Rejections();
+		const body = `${BOX.replace("╰───────╯", "╰────────╯")}\n${BROKEN}`;
+		const send = () => planDiagram(at(), { title: "t", body }, { rejections }).text;
+		const first = send();
+		assert.match(
+			first,
+			/^Diagram rejected: 1 error left after repairing 1 alignment slip\.[^\n]*\nAlready repaired by the checker, nothing to do for these:\n- line 3 col 10: moved ╯[^\n]*\nStill wrong \(lines and columns of the repaired drawing below\):\n- line 5 col 8 error: box side/,
+		);
+		assert.doesNotMatch(first, /Make these changes|came back/);
+		assert.match(send(), /You made this kind of error in your last attempt too/);
 	});
 
 	it("checks the width it is given", () => {
