@@ -46,6 +46,11 @@ export interface ModeEvent extends Base {
 	type: "mode";
 	mode: Mode;
 	at: number;
+	/**
+	 * Entering architect mode: the write tools that were already off, so build mode leaves them off.
+	 * Pi restores the tool set from the transcript after a reload, so the event has to remember this.
+	 */
+	keptOff?: string[];
 }
 
 /** `/architect <feature>`: a new architecture for a named feature. Replaces any earlier one. */

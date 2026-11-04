@@ -246,6 +246,48 @@ describe("persistence", () => {
 		assert.match(ui.widgetLines(WIDGET_KEY)![0]!, /◆ ARCHITECT {2}Dedupe {2}● Frame/);
 	});
 
+	it("brings edit and write back in build mode after a reload restored the architect tool set", async () => {
+		const first = await architecting();
+		await first.call("architect_update", { feature: "Dedupe" });
+		// Pi restores the tools of the last run from the transcript: the architect set, without edit and write.
+		const restored = first.active();
+		assert.ok(!restored.includes("edit") && !restored.includes("write"));
+		const second = harness({ ui: new FakeUi({ confirm: [true] }), branch: [...first.branch], activeTools: restored });
+		await second.fire("session_start", { reason: "reload" });
+		await second.command("architect", "build");
+		assert.ok(second.active().includes("edit") && second.active().includes("write"));
+		assert.ok(!second.active().some((n) => n.startsWith("architect_")));
+	});
+
+	it("brings edit and write back when a reload lands in build mode with the architect tool set", async () => {
+		const first = await architecting();
+		const restored = first.active();
+		await first.command("architect", "build");
+		const second = harness({ ui: new FakeUi(), branch: [...first.branch], activeTools: restored });
+		await second.fire("session_tree", {});
+		assert.deepEqual(second.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
+	});
+
+	it("keeps a write tool off in build mode when the user had it off before architect mode", async () => {
+		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash", "edit"] });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		assert.deepEqual(h.entries[0]!.data.keptOff, ["write"]);
+		const restored = h.active();
+		const after = harness({ ui: new FakeUi(), branch: [...h.branch], activeTools: restored });
+		await after.fire("session_start", { reason: "resume" });
+		await after.command("architect", "build");
+		assert.ok(after.active().includes("edit"));
+		assert.ok(!after.active().includes("write"));
+	});
+
+	it("leaves the tools alone in a session that was never in architect mode", async () => {
+		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash"] });
+		await h.fire("session_start", { reason: "startup" });
+		assert.deepEqual(h.active(), ["read", "bash"]);
+		assert.deepEqual(h.activeHistory, []);
+	});
+
 	it("rebuilds on /tree navigation, so a fork is a what-if branch", async () => {
 		const h = await architecting();
 		const forkPoint = h.branch.length;

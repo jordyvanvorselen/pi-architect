@@ -82,8 +82,6 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
 	let widget: "stepper" | "plan" | undefined;
-	/** Tools architect mode turned off, to turn back on in build mode. In memory: Pi starts with its defaults again. */
-	const turnedOff = new Set<string>();
 	/** Slices of the plan file as last read. The file is the source of truth, so this is only a cache. */
 	let progress: SliceProgress[] | undefined;
 
@@ -92,21 +90,36 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	const has = (name: string) => pi.getAllTools().some((t) => t.name === name);
 
+	/**
+	 * Make the active tools fit the mode. Architect mode turns the write tools off and the architect tools on.
+	 * Build mode turns the architect tools off and every write tool back on, except the ones the user already
+	 * had off before architect mode. Pi restores the tool set from the transcript after a reload, a resume or
+	 * /tree, so this works from the state alone and never from what it turned off in memory.
+	 */
 	function applyTools(): void {
 		const active = pi.getActiveTools();
+		const all = new Set(pi.getAllTools().map((t) => t.name));
 		let next: string[];
 		if (state.mode === "architect") {
-			for (const name of active) if (OFF_IN_ARCHITECT.includes(name)) turnedOff.add(name);
-			const architect = pi
-				.getAllTools()
-				.map((t) => t.name)
-				.filter(isArchitectTool);
+			const architect = [...all].filter(isArchitectTool);
 			next = [...new Set([...active.filter((n) => !OFF_IN_ARCHITECT.includes(n)), ...architect])];
 		} else {
-			next = [...new Set([...active.filter((n) => !isArchitectTool(n)), ...turnedOff])];
-			turnedOff.clear();
+			const keptOff = state.keptOff;
+			const back = keptOff ? OFF_IN_ARCHITECT.filter((n) => all.has(n) && !keptOff.includes(n)) : [];
+			next = [...new Set([...active.filter((n) => !isArchitectTool(n)), ...back])];
 		}
 		if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
+	}
+
+	/** The event that switches mode. Entering architect mode remembers which write tools were already off. */
+	function modeEvent(mode: Mode): EventInput {
+		if (mode === "build") return { type: "mode", mode, at: now() };
+		const active = new Set(pi.getActiveTools());
+		const keptOff = pi
+			.getAllTools()
+			.map((t) => t.name)
+			.filter((n) => OFF_IN_ARCHITECT.includes(n) && !active.has(n));
+		return { type: "mode", mode, at: now(), keptOff };
 	}
 
 	function refresh(): void {
@@ -244,7 +257,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			);
 			if (!ok) return false;
 		}
-		append({ type: "mode", mode, at: now() });
+		append(modeEvent(mode));
 		return true;
 	}
 
@@ -358,7 +371,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			append({ type: "begin", feature, slug: slugify(feature), at: now() });
 			begun = true;
 		}
-		if (state.mode !== "architect") append({ type: "mode", mode: "architect", at: now() });
+		if (state.mode !== "architect") append(modeEvent("architect"));
 		if (begun)
 			pi.sendMessage(
 				{
