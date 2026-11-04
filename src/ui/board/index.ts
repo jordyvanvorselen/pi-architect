@@ -23,6 +23,8 @@ export interface OpenBoardOptions {
 	/** Pi's markdown theme, for the Plan tab. Falls back to one made from the theme colours. */
 	markdown?: MarkdownTheme;
 	tab?: BoardTab;
+	/** No comments, also in architect mode. For a board opened over a review screen or decision card. */
+	readOnly?: boolean;
 	/** Called with the open board, and with undefined when it closes, so the caller can push updates. */
 	onOpen?: (board: BoardScreen | undefined) => void;
 }
@@ -85,6 +87,7 @@ export async function openBoard(ctx: ExtensionContext, options: OpenBoardOptions
 					data: options.data,
 					markdown: markdown ?? paintMarkdownTheme(paint),
 					...(options.tab ? { tab: options.tab } : {}),
+					...(options.readOnly ? { readOnly: true } : {}),
 					done,
 				});
 				options.onOpen?.(board);

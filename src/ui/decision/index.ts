@@ -1,5 +1,5 @@
 import { selectDecision, type DecisionAnswer, type DecisionUi } from "../../decision.ts";
-import type { GraceOptions } from "../grace.ts";
+import { screenOptions, type ScreenUiOptions } from "../screen-options.ts";
 import type { Paint } from "../paint.ts";
 import { DecisionCard } from "./component.ts";
 
@@ -9,10 +9,11 @@ export { renderDecision, type DecisionView } from "./card.ts";
 /**
  * The decision card, inline in place of the editor so the transcript stays in view and terminals can show
  * Pi as waiting for the user. RPC and other non-terminal modes get the simple select dialog.
- * `grace` sets the clock and length of the input grace period after the card opens.
+ * `options` sets the clock and length of the input grace period after the card opens, and how `b` opens
+ * the board.
  */
 export const createDecisionCard =
-	(grace: GraceOptions = {}): DecisionUi =>
+	(options: ScreenUiOptions = {}): DecisionUi =>
 	async (request, ctx) => {
 		if (ctx.mode !== "tui") return selectDecision(request, ctx);
 		const { signal } = request;
@@ -28,7 +29,7 @@ export const createDecisionCard =
 				const abort = () => finish(undefined);
 				if (signal?.aborted) queueMicrotask(abort);
 				else signal?.addEventListener("abort", abort, { once: true });
-				return new DecisionCard(tui, theme as Paint, request, finish, grace);
+				return new DecisionCard(tui, theme as Paint, request, finish, screenOptions(options, ctx));
 			},
 			{ blocked: { kind: "question", message: request.decision.question } },
 		);

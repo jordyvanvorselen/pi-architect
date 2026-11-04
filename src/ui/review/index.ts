@@ -1,6 +1,6 @@
 import { selectReview, type ReviewAnswer, type ReviewUi } from "../../review.ts";
 import { PHASE_LABEL, type Phase } from "../../state/phases.ts";
-import type { GraceOptions } from "../grace.ts";
+import { screenOptions, type ScreenUiOptions } from "../screen-options.ts";
 import type { Paint } from "../paint.ts";
 import { blueprintBody } from "./blueprint.ts";
 import type { ReviewBody } from "./common.ts";
@@ -28,10 +28,14 @@ export const REVIEW_BODIES: Record<Phase, ReviewBody> = {
 /**
  * The Phase Review screen, inline in place of the editor so the transcript stays in view and terminals can
  * show Pi as waiting for the user. `bodies` replaces the body of some phases, e.g. the Blueprint.
- * `grace` sets the clock and length of the input grace period after the screen opens.
+ * `options` sets the clock and length of the input grace period after the screen opens, and how `b` opens
+ * the board.
  * RPC and other non-terminal modes get the simple select dialog.
  */
-export function createPhaseReview(bodies: Partial<Record<Phase, ReviewBody>> = {}, grace: GraceOptions = {}): ReviewUi {
+export function createPhaseReview(
+	bodies: Partial<Record<Phase, ReviewBody>> = {},
+	options: ScreenUiOptions = {},
+): ReviewUi {
 	const all = { ...REVIEW_BODIES, ...bodies };
 	return async (request, ctx) => {
 		if (ctx.mode !== "tui") return selectReview(request, ctx);
@@ -48,7 +52,8 @@ export function createPhaseReview(bodies: Partial<Record<Phase, ReviewBody>> = {
 				const abort = () => finish(undefined);
 				if (signal?.aborted) queueMicrotask(abort);
 				else signal?.addEventListener("abort", abort, { once: true });
-				return new ReviewScreen(tui, theme as Paint, request, all[request.phase], finish, grace);
+				const screen = screenOptions(options, ctx);
+				return new ReviewScreen(tui, theme as Paint, request, all[request.phase], finish, screen);
 			},
 			{ blocked: { kind: "question", message: `Review ${PHASE_LABEL[request.phase]}` } },
 		);

@@ -107,11 +107,11 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 │  ★ Agent recommends A  In processor                                                  │
 │    One owner, no new infra.                                                          │
 │                                                                                      │
-│  ↵ choose  c choose with comment  n own option  ? ask  ←→ move  esc close            │
+│  ↵ choose  c choose with comment  n own option  ? ask  ←→ move  b board  esc close   │
 ╰──────────────────────────────────────────────────────────────────────────────────────╯
 ```
 
-- ←/→, tab and 1–4 move between options. Focus starts on the recommendation. ↵ chooses.
+- ←/→, tab and 1–4 move between options. Focus starts on the recommendation. ↵ chooses. `b` opens the board.
 - `c` chooses with a comment, `n` writes an own option, `?` asks a question instead. Each opens an editor inside the card.
 - Four options sit two by two when a row does not fit. On narrow or short terminals the options fold into a list with the focused one open.
 - The choice and any comment go back to the model as the tool result. "Pick B, but only for alarms" is a valid answer.
@@ -131,9 +131,9 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Slice     | The slices in build order, with arrows, files, steps and verify       |
 | Blueprint | Everything on one page, and the path the plan file will be written to |
 
-Long screens scroll with ↑/↓, PgUp/PgDn, Home and End. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, esc closes.
+Long screens scroll with ↑/↓, PgUp/PgDn, Home and End. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board, esc closes.
 
-For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing. A ↵ meant for the chat editor then cannot choose or approve by accident. The arrows and esc still work.
+For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing. A ↵ meant for the chat editor then cannot choose or approve by accident. The arrows, `b` and esc still work.
 
 The card and the screens are inline, in place of the editor. The transcript stays in view, and terminals that support it show Pi as waiting for the user. RPC clients get simple select dialogs instead.
 
@@ -151,6 +151,10 @@ v1 shows Unicode only. Image rendering through Pi's `Image` component can come l
 
 `/architect board` or `ctrl+alt+b` opens the board: the whole design on one screen, as an overlay over the terminal.
 The stepper and the build widget show `ctrl+alt+b board` while there is room for it.
+
+Pi runs extension shortcuts only from the main editor, so `ctrl+alt+b` does nothing while a decision card or review screen is open.
+There, `b` opens the board on top. It is read-only: the card or the screen is where the user answers, and the agent waits for that answer.
+Closing the board returns to the card or the screen exactly as it was.
 
 ```
 ╭─ ◆ Board  Dedupe panel events ───────────────────────────────────────────────────────────────╮
@@ -214,7 +218,7 @@ An editor opens at the bottom. ↵ saves the comment, esc cancels.
 
 - When the agent is idle the message starts a turn. When it is working, the message is steered in, so the agent reads it before its next step.
 
-In build mode the board is read-only: it shows the approved architecture and the plan file, without comments.
+In build mode the board is read-only: it shows the approved architecture and the plan file, without comments. So is a board opened from a decision card or review screen.
 A session that only builds from a plan file shows that file on the Plan tab.
 
 ## The model-facing surface

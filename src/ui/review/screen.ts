@@ -14,6 +14,8 @@ export interface ReviewView {
 	/** First body line in view. Clamped to the body. */
 	scroll: number;
 	mode: ReviewMode;
+	/** Whether `b` opens the board, for the key hints. */
+	board?: boolean;
 	/** The inline editor's lines at a width, in `changes` mode. */
 	editor?: (width: number) => Line[];
 	/** Rows the screen may use. Longer bodies scroll. */
@@ -60,6 +62,7 @@ function footer(view: ReviewView, inner: number, scrollable: boolean): Line[] {
 			["↵", `approve ${label}`],
 			["r", "request changes"],
 			...(scrollable ? ([["↑↓", "scroll"]] as const) : []),
+			...(view.board ? ([["b", "board"]] as const) : []),
 			["esc", "close"],
 		],
 		inner,

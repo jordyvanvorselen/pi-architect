@@ -71,7 +71,18 @@ const textOf = (result: { content: { type: string; text?: string }[] }) =>
 export default function architectExtension(pi: ExtensionAPI, overrides: ArchitectOverrides = {}): void {
 	const now = overrides.now ?? Date.now;
 	const grace = { now, ...(overrides.inputGrace !== undefined ? { graceMs: overrides.inputGrace } : {}) };
-	const review = overrides.review ?? createPhaseReview({}, grace);
+	// The review screens and decision cards open the board with `b`: Pi runs extension shortcuts only from
+	// the main editor, so ctrl+alt+b does not reach them. Read-only there: the answer on the screen is the
+	// way to give feedback, and the agent is waiting for it.
+	const screens = {
+		...grace,
+		board: (ctx: ExtensionContext) => {
+			showBoard(ctx, { readOnly: true }).catch((error: unknown) =>
+				ctx.ui.notify(`Could not open the board: ${error instanceof Error ? error.message : String(error)}`, "error"),
+			);
+		},
+	};
+	const review = overrides.review ?? createPhaseReview({}, screens);
 	let state: ArchitectState = INITIAL_STATE;
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
@@ -244,8 +255,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	const toggle = (ctx: ExtensionContext) => setMode(state.mode === "architect" ? "build" : "architect", ctx);
 
-	/** The whole architecture on one overlay. Comments the user writes there go to the agent on close. */
-	async function showBoard(ctx: ExtensionContext): Promise<void> {
+	/**
+	 * The whole architecture on one overlay. Comments the user writes there go to the agent on close.
+	 * `readOnly` turns comments off, for a board over a review screen or decision card.
+	 */
+	async function showBoard(ctx: ExtensionContext, { readOnly = false } = {}): Promise<void> {
 		ctxRef = ctx;
 		if (board) return;
 		await syncProgress(ctx);
@@ -264,6 +278,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 				session,
 			}),
 			send: (text, options) => pi.sendUserMessage(text, options),
+			readOnly,
 			onOpen: (open) => (board = open),
 		});
 	}
@@ -357,7 +372,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	});
 
 	registerDiagramTool(pi, { state: () => state, append, has });
-	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? createDecisionCard(grace) });
+	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? createDecisionCard(screens) });
 
 	pi.registerTool({
 		name: "architect_slice",
