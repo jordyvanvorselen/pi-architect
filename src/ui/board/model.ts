@@ -1,5 +1,5 @@
 import { Markdown, stripTerminalSequences, type MarkdownTheme } from "@earendil-works/pi-tui";
-import { renderDiagram } from "../../diagram/index.ts";
+import { captionedDiagram } from "../captioned.ts";
 import { buildBlueprint } from "../../plan/blueprint.ts";
 import { isDone, type SliceProgress } from "../../plan/progress.ts";
 import { PHASE_LABEL, phaseIndex, type Phase } from "../../state/phases.ts";
@@ -318,8 +318,8 @@ export function diagramCard(diagram: Diagram, width: number, paint: Paint): Line
 		...(diagram.caption ? { caption: diagram.caption } : {}),
 	};
 	const options = { fullView: "the full view with ↵" };
-	const plain = renderDiagram(d, width, PLAIN, options);
-	return renderDiagram(d, width, paint, options).map((line, i) => [raw(line, plain[i] ?? "")]);
+	const plain = captionedDiagram(d, width, PLAIN, options);
+	return captionedDiagram(d, width, paint, options).map((line, i) => [raw(line, plain[i] ?? "")]);
 }
 
 function diagramsContent(arch: Architecture, paint: Paint): TabContent {

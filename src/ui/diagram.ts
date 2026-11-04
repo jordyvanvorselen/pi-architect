@@ -1,10 +1,11 @@
 // How an `architect_diagram` call looks in the transcript: a one-line summary, the full card when expanded, and
 // the linter's findings when the drawing was rejected.
 import { type Component, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import { type DiagramFinding, type DiagramTheme, renderDiagram } from "../diagram/index.ts";
+import { type DiagramFinding, type DiagramTheme } from "../diagram/index.ts";
 import { wrap } from "../diagram/text.ts";
 import { PHASE_LABEL } from "../state/phases.ts";
 import type { DiagramDetails, DiagramInput } from "../tools/diagram.ts";
+import { captionedDiagram } from "./captioned.ts";
 import type { Paint } from "./paint.ts";
 
 type Theme = Paint & DiagramTheme;
@@ -124,7 +125,7 @@ export function diagramResult(
 	if (!options.expanded) return v.set((width) => [fit(`${summary} ${paint.fg("dim", `(${hint})`)}`, width)]);
 	return v.set((width) => [
 		fit(summary, width),
-		...renderDiagram(diagram, width, paint),
+		...captionedDiagram(diagram, width, paint),
 		...findingLines(details.warnings, true, width, paint),
 	]);
 }
