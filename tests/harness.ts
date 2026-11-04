@@ -1,8 +1,6 @@
-import { mkdtempSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import ext, { type ArchitectOverrides } from "../src/index.ts";
 import { FakeUi, plainTheme } from "./helpers.ts";
+import { tempDir } from "./temp.ts";
 
 type Handler = (event: unknown, ctx: unknown) => unknown;
 
@@ -82,7 +80,10 @@ export function harness(
 		 * or /tree. Default: the builtins plus the extension's tools that are active by default.
 		 */
 		activeTools?: string[];
-		/** The session's cwd. Default: a fresh temp directory, so a written plan never lands in a real project. */
+		/**
+		 * The session's cwd. Default: a fresh temp directory, so a written plan never lands in a real project.
+		 * It is removed after the tests of the file.
+		 */
 		cwd?: string;
 		/** Exit code of every `pi.exec` call. */
 		execCode?: number;
@@ -106,7 +107,7 @@ export function harness(
 	let active = [...builtins];
 	const activeHistory: string[][] = [];
 	let clock = 1_000;
-	const cwd = options.cwd ?? mkdtempSync(join(tmpdir(), "pi-architect-"));
+	const cwd = options.cwd ?? tempDir();
 
 	const pi = {
 		on: (event: string, handler: Handler) => (handlers[event] ??= []).push(handler),

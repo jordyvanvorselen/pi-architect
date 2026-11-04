@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import type { ReviewAnswer, ReviewRequest } from "../src/review.ts";
@@ -18,6 +17,7 @@ import { fullArchitecture } from "./fixtures/plan/architecture.ts";
 import { paintLine, sp } from "../src/ui/spans.ts";
 import { ENTRY_TYPE, event, type EventInput } from "../src/state/events.ts";
 import { harness, type BranchEntry } from "./harness.ts";
+import { tempDir } from "./temp.ts";
 import { assertFits, FakeUi, KEYS, plain, plainTheme, tagTheme, type } from "./helpers.ts";
 
 const o = (id: string, title: string) => ({ id, title, pros: [], cons: [], effort: 2 as const, risk: 1 as const });
@@ -388,7 +388,7 @@ describe("phase review screens", () => {
 				entry({ type: "verdict", phase, verdict: "approved", at: 3 + i }),
 			),
 		];
-		const cwd = await mkdtemp(join(tmpdir(), "pi-architect-"));
+		const cwd = tempDir();
 		await mkdir(join(cwd, "docs", "plans"), { recursive: true });
 		await writeFile(join(cwd, "docs", "plans", "dedupe.md"), "someone else's plan");
 		const ui = new FakeUi().keys([KEYS.enter]);
