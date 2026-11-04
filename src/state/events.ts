@@ -49,7 +49,7 @@ export interface ModeEvent extends Base {
 	at: number;
 	/**
 	 * Entering architect mode: the tools it turned off, so build mode turns exactly those back on.
-	 * Pi restores the tool set from the transcript after a reload, so the event has to remember this.
+	 * The extension starts fresh after a reload, a resume or /tree, so the event has to remember this.
 	 */
 	turnedOff?: string[];
 }

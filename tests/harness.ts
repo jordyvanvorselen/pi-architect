@@ -76,8 +76,8 @@ export function harness(
 		/** Tools Pi has besides the extension's own. */
 		builtins?: string[];
 		/**
-		 * The tool set Pi starts with, like the one it restores from the transcript after a reload, a resume
-		 * or /tree. Default: the builtins plus the extension's tools that are active by default.
+		 * The tool set Pi starts with, like the one it keeps after a reload, or restores from the transcript
+		 * after a resume or /tree. Default: the builtins plus the extension's tools that are active by default.
 		 */
 		activeTools?: string[];
 		/**
