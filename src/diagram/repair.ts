@@ -217,6 +217,7 @@ function* sideRepairs(grid: Grid): Generator<Candidate> {
 			if (!rows.length) continue;
 			const cells: Candidate["cells"] = [];
 			const moved: string[] = [];
+			const filled = new Set<number>();
 			const chars = new Set<string>();
 			for (const r of rows) {
 				const move = moveSide(grid, box, r, col, new Set(rows));
@@ -226,16 +227,18 @@ function* sideRepairs(grid: Grid): Generator<Candidate> {
 				}
 				cells.push(...move.cells);
 				moved.push(`${move.from + 1}`);
+				if (move.filled) filled.add(move.from + 1);
 				chars.add(grid.at(r, move.from));
 			}
 			if (!cells.length) continue;
 			const lines = rows.map((r) => r + 1);
+			const drew = filled.size ? `, and drew ${PLAIN_H} at col ${[...filled].join(", ")}` : "";
 			yield {
 				cells,
 				repair: {
 					line: rows[0]! + 1,
 					col: col + 1,
-					message: `moved the box side ${[...chars].join(" ")} to col ${col + 1} on line${lines.length > 1 ? "s" : ""} ${lines.join(", ")} (it was at col ${[...new Set(moved)].join(", ")}), in line with the box opened at line ${top + 1} col ${left + 1}`,
+					message: `moved the box side ${[...chars].join(" ")} to col ${col + 1} on line${lines.length > 1 ? "s" : ""} ${lines.join(", ")} (it was at col ${[...new Set(moved)].join(", ")}), in line with the box opened at line ${top + 1} col ${left + 1}${drew}`,
 				},
 			};
 		}
@@ -254,7 +257,7 @@ function moveSide(
 	r: number,
 	col: number,
 	moving: Set<number>,
-): { cells: Candidate["cells"]; from: number } | undefined {
+): { cells: Candidate["cells"]; from: number; filled: boolean } | undefined {
 	if (grid.wide[r]?.size || !isBlank(grid.at(r, col))) return undefined;
 	const found = [col - 1, col + 1].filter((c) => c !== box.left && c !== box.right && isVertical(grid.at(r, c)));
 	if (found.length !== 1) return undefined;
@@ -279,6 +282,7 @@ function moveSide(
 			{ r, c: from, ch: fill },
 		],
 		from,
+		filled: fill === PLAIN_H,
 	};
 }
 
