@@ -139,7 +139,7 @@ esc closes the screen, but first asks in the bottom bar: `Close without a verdic
 A closed review tells the agent the user closed it, and the agent stops. `/architect review` opens the same review again, with the agent's summary.
 The verdict then goes to the agent as a message that starts its next turn.
 
-For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing. A ↵ meant for the chat editor then cannot choose or approve by accident. The arrows, `b` and esc still work.
+For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing, also ↵ in the close question. A ↵ meant for the chat editor then cannot choose, approve or close by accident. The arrows, `b` and esc still work.
 
 The card and the screens are inline, in place of the editor. The transcript stays in view, and terminals that support it show Pi as waiting for the user. RPC clients get simple select dialogs instead.
 
