@@ -389,6 +389,31 @@ describe("persistence", () => {
 		assert.deepEqual(h.entries.at(-1)!.data, { v: 1, type: "tools", turnedOff: ["mcp__late"] });
 	});
 
+	it("keeps a tool off that a later extension turns back on at session start and before each run", async () => {
+		const builtins = ["read", "bash", "edit", "write", "web_enable"];
+		const h = harness({ ui: new FakeUi(), builtins });
+		// Like pi-web-access: it loads after pi-architect and turns web_enable on whenever it is off.
+		const turnOn = () => {
+			if (!h.pi.getActiveTools().includes("web_enable")) h.pi.setActiveTools([...h.pi.getActiveTools(), "web_enable"]);
+		};
+		h.pi.on("session_start", turnOn);
+		h.pi.on("before_agent_start", turnOn);
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		assert.ok(!h.active().includes("web_enable"));
+		// A reload: the extension turns it on in its session_start, and Pi fires resources_discover after that.
+		await h.fire("session_start", { reason: "reload" });
+		assert.ok(h.active().includes("web_enable"));
+		await h.fire("resources_discover", { cwd: h.cwd, reason: "reload" });
+		assert.ok(!h.active().includes("web_enable"));
+		for (let run = 0; run < 2; run++) {
+			await h.startRun();
+			assert.ok(!h.active().includes("web_enable"), `run ${run + 1}`);
+		}
+		await h.command("architect", "build");
+		assert.ok(h.active().includes("web_enable"));
+	});
+
 	it("leaves the tools alone in a session that was never in architect mode", async () => {
 		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash"] });
 		await h.fire("session_start", { reason: "startup" });
