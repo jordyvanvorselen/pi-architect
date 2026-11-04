@@ -5,7 +5,7 @@ Architect a feature with [Pi](https://github.com/earendil-works/pi) before you b
 The agent walks through six phases: Frame, Explore, Decide, Design, Slice and Blueprint.
 You approve each phase before it moves on. The result is a plan that another agent can build from.
 
-> Work in progress. See [DESIGN.md](./DESIGN.md) for the plan.
+> Work in progress. See [DESIGN.md](https://github.com/jordyvanvorselen/pi-architect/blob/main/DESIGN.md) for the plan.
 
 ## Install
 
