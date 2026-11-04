@@ -434,6 +434,10 @@ describe("phase review keys", () => {
 		assert.deepEqual(s.answers, []);
 	});
 
+	it("takes PgUp and PgDn from Pi's fullscreen transcript, which would scroll instead", () => {
+		assert.equal(screen("slice").component.capturesViewportInput, true);
+	});
+
 	it("does not scroll a body that fits", () => {
 		const s = screen("decide");
 		s.keys(KEYS.down);

@@ -131,7 +131,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Slice     | The slices in build order, with arrows, files, steps and verify       |
 | Blueprint | Everything on one page, and the path the plan file will be written to |
 
-Long screens scroll with ↑/↓, PgUp/PgDn, Home and End. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board, esc closes.
+Long screens scroll with ↑/↓, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board, esc closes.
 
 For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing. A ↵ meant for the chat editor then cannot choose or approve by accident. The arrows, `b` and esc still work.
 
