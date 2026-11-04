@@ -11,6 +11,7 @@ import {
 	wrap,
 	type Line,
 	type Span,
+	confirmLines,
 } from "../spans.ts";
 
 /**
@@ -65,15 +66,15 @@ export function reviewGeometry(total: number): { width: number; padX: number; in
 
 function footer(view: ReviewView, inner: number, scrollable: boolean): Line[] {
 	const label = PHASE_LABEL[view.phase];
-	if (view.mode === "closing") {
-		const keys = hints([
-			["↵", "close"],
-			["esc", "back"],
-		]);
-		const question = sp(CLOSE_QUESTION, "warning", true);
-		if (lineWidth([question]) + 2 + lineWidth(keys) <= inner) return [[question, sp("  "), ...keys]];
-		return [...wrap(CLOSE_QUESTION, inner).map((l) => [sp(l, "warning", true)]), keys];
-	}
+	if (view.mode === "closing")
+		return confirmLines(
+			CLOSE_QUESTION,
+			[
+				["↵", "close"],
+				["esc", "back"],
+			],
+			inner,
+		);
 	if (view.mode === "changes")
 		return [
 			[sp(`What should change in ${label}?`, "accent", true)],
@@ -87,16 +88,33 @@ function footer(view: ReviewView, inner: number, scrollable: boolean): Line[] {
 				inner,
 			),
 		];
-	return hintLines(
+	// The widest set that fits on one line, else the short one on as few lines as it takes.
+	const board = view.board ? ([["b", "board"]] as const) : [];
+	const sets: (readonly (readonly [string, string])[])[] = [
+		[
+			["↵", `approve ${label}`],
+			["r", "request changes"],
+			...(scrollable ? ([["↑↓ pgup pgdn", "scroll"]] as const) : []),
+			...board,
+			["esc", "close"],
+		],
 		[
 			["↵", `approve ${label}`],
 			["r", "request changes"],
 			...(scrollable ? ([["↑↓", "scroll"]] as const) : []),
-			...(view.board ? ([["b", "board"]] as const) : []),
+			...board,
 			["esc", "close"],
 		],
-		inner,
-	);
+		[
+			["↵", "approve"],
+			["r", "changes"],
+			...(scrollable ? ([["↑↓", "scroll"]] as const) : []),
+			...board,
+			["esc", "close"],
+		],
+	];
+	const fits = sets.find((set) => lineWidth(hints(set)) <= inner);
+	return fits ? [hints(fits)] : hintLines(sets.at(-1)!, inner);
 }
 
 /** `↑ 4 · ↓ 12 more`, or nothing when the whole body is in view. */

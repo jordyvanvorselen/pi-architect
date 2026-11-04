@@ -369,7 +369,7 @@ export class BoardScreen implements Component, Focusable {
 		return { lines, owners, ranges };
 	}
 
-	/** `Send 2 comments to the agent?  ↵ send  d discard  esc keep editing`, shorter where that does not fit. */
+	/** `Send 2 comments to the agent?  ↵ send  d discard  esc back`, shorter where that does not fit. */
 	private confirmLine(inner: number): Line {
 		const n = this.comments.size;
 		const comments = n === 1 ? "1 comment" : `${n} comments`;
@@ -379,7 +379,7 @@ export class BoardScreen implements Component, Focusable {
 				[
 					["↵", "send"],
 					["d", "discard"],
-					["esc", "keep editing"],
+					["esc", "back"],
 				],
 			],
 			[
