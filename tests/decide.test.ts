@@ -114,8 +114,22 @@ describe("architect_decide", () => {
 		);
 		assert.equal(result.details?.comment, "only alarms");
 		assert.equal(result.details?.total, 3);
-		assert.match(ui.customs[1]!.frames[0]![0]!, /Decision 2\/3/);
+		// Two decisions are raised, three expected: the card says the 3 is an estimate.
+		assert.match(ui.customs[1]!.frames[0]![0]!, /Decision 2 of about 3 /);
 		assert.equal(arch(h).decisions[1]!.comment, "only alarms");
+	});
+
+	it("counts only raised decisions as N/M, and shows the agent's estimate as one", async () => {
+		const ui = new FakeUi().keys([KEYS.escape], [KEYS.escape], [KEYS.escape], [KEYS.escape]);
+		const h = await session(ui);
+		await h.call("architect_decide", { ...INPUT, total: 2 });
+		await h.call("architect_decide", { ...INPUT, question: "Second?" });
+		await h.call("architect_decide", { ...INPUT, id: "q1" });
+		await h.call("architect_decide", { ...INPUT, question: "Third?", total: 2 });
+		const headers = ui.customs.map((c) => c.frames[0]![0]!.match(/Decision [^─]*/)![0].trim());
+		// q1 with an estimate of 2 while only q1 exists; q2 is the latest of 2; q1 again with 2 raised;
+		// q3 where the estimate is below the real count.
+		assert.deepEqual(headers, ["Decision 1 of about 2", "Decision 2/2", "Decision 1/2", "Decision 3/3"]);
 	});
 
 	it("records the user's own option as a new option and chooses it", async () => {

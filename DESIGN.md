@@ -117,6 +117,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 - The choice and any comment go back to the model as the tool result. "Pick B, but only for alarms" is a valid answer.
   An own option is recorded as a new option and chosen. A question goes back to the model, which answers and asks again with the same id.
 - Decision ids are `q1`, `q2` and so on. Diagrams use `d1`.
+- The header counts the decisions raised so far, like `Decision 3/5`. When the agent estimates more than are raised, it shows the estimate as one: `Decision 1 of about 3`.
 
 ## Phase Review screens
 

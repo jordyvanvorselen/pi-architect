@@ -125,7 +125,7 @@ export class DecisionCard implements Component, Focusable {
 		// The room changes with Pi's chrome, e.g. when the loader or a queued message shows.
 		const rows = Math.max(10, inlineRoom(this.tui, this, width));
 		if (this.cache?.width === width && this.cache.rows === rows) return this.cache.lines;
-		const { decision, index, total, feature } = this.request;
+		const { decision, index, total, expected, feature } = this.request;
 		const editor = this.editor;
 		const lines = renderDecision(
 			{
@@ -135,6 +135,7 @@ export class DecisionCard implements Component, Focusable {
 				board: this.board !== undefined,
 				...(index !== undefined ? { index } : {}),
 				...(total !== undefined ? { total } : {}),
+				...(expected !== undefined ? { expected } : {}),
 				...(feature ? { feature } : {}),
 				...(editor ? { editor: (w: number) => editor.lines(w) } : {}),
 				maxRows: rows,

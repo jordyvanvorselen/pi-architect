@@ -27,7 +27,10 @@ export interface DecisionView {
 	board?: boolean;
 	/** 1-based position of this decision, for "Decision 3/5". */
 	index?: number;
+	/** How many decisions are raised, a real count: "Decision 3/5". */
 	total?: number;
+	/** How many decisions the agent expects, its estimate: "Decision 1 of about 3". */
+	expected?: number;
 	feature?: string;
 	/** The inline editor's lines at a width, while `mode` is not `browse`. */
 	editor?: (width: number) => Line[];
@@ -223,7 +226,15 @@ export function frameWidth(count: number, total: number): number {
 }
 
 function header(view: DecisionView): { title: Line; right: Line } {
-	const position = view.index ? ` ${view.index}${view.total ? `/${Math.max(view.total, view.index)}` : ""}` : "";
+	const { index, total, expected } = view;
+	// Only a real count reads as "3/5". The agent's estimate says it is one: "1 of about 3".
+	const position = !index
+		? ""
+		: expected && expected > Math.max(total ?? 0, index)
+			? ` ${index} of about ${expected}`
+			: total && total > 1
+				? ` ${index}/${Math.max(total, index)}`
+				: ` ${index}`;
 	return {
 		title: [sp("◆", "accent", true), sp(` Decision${position}`, "accent", true)],
 		right: view.feature ? [sp(view.feature, "dim")] : [],

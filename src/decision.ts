@@ -5,8 +5,10 @@ export interface DecisionRequest {
 	decision: Decision;
 	/** 1-based position of this decision among all decisions, for "Decision 3/5". */
 	index?: number;
-	/** How many decisions the agent expects, when it said. */
+	/** How many decisions are raised so far, a real count. */
 	total?: number;
+	/** How many decisions the agent expects, when it said and it is more than are raised. */
+	expected?: number;
 	feature?: string;
 	/** Aborts when the user interrupts the agent. Close the card when it fires. */
 	signal?: AbortSignal;
