@@ -6,8 +6,16 @@ import { buildOrder } from "./plan/order.ts";
 import { parsePlanProgress, type SliceProgress } from "./plan/progress.ts";
 import { renderPlan } from "./plan/render.ts";
 import { DEFAULT_PLAN_DIR, displayPath, nextPlanPath, planFile, readPlan, writePlan } from "./plan/write.ts";
-import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, SECTION } from "./prompt.ts";
+import {
+	architectSection,
+	drawingRulesInContext,
+	MODE_MESSAGE,
+	modeNotice,
+	modeToldToModel,
+	SECTION,
+} from "./prompt.ts";
 import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
+import { REVIEW_MESSAGE, Reviews } from "./reopen.ts";
 import type { DecisionUi } from "./decision.ts";
 import type { ReviewUi } from "./review.ts";
 import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state/events.ts";
@@ -15,6 +23,7 @@ import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
 import type { ArchitectState, Mode } from "./state/types.ts";
 import { registerAdvanceTool, type Finalized } from "./tools/advance.ts";
+import { phaseTools } from "./tools/common.ts";
 import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { registerSliceTool } from "./tools/slice.ts";
@@ -37,7 +46,7 @@ export const FLAG = "architect";
 /** `--architect-plan-dir <dir>`: where plan files go, relative to the cwd. */
 export const PLAN_DIR_FLAG = "architect-plan-dir";
 /** The first words `/architect` reserves. Anything else names a feature. */
-export const SUBCOMMAND_NAMES = ["board", "plan", "build", "reset"] as const;
+export const SUBCOMMAND_NAMES = ["board", "review", "plan", "build", "reset"] as const;
 type Subcommand = (typeof SUBCOMMAND_NAMES)[number];
 
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
@@ -77,7 +86,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			);
 		},
 	};
-	const review = overrides.review ?? createPhaseReview({}, screens);
+	// Remembers a review closed without a verdict, so `/architect review` can open it again.
+	const reviews = new Reviews();
+	const review = reviews.wrap(overrides.review ?? createPhaseReview({}, screens));
 	let state: ArchitectState = INITIAL_STATE;
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
@@ -88,10 +99,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	/** The open board, so it redraws when the architecture changes. */
 	let board: BoardScreen | undefined;
 
-	const has = (name: string) => pi.getAllTools().some((t) => t.name === name);
-
 	/**
-	 * Make the active tools fit the mode. Architect mode turns the write tools off and the architect tools on.
+	 * Make the active tools fit the mode and the phase. Architect mode turns the write tools off and the
+	 * architect tools of the current phase on (see `phaseTools`).
 	 * Build mode turns the architect tools off and every write tool back on, except the ones the user already
 	 * had off before architect mode. Pi restores the tool set from the transcript after a reload, a resume or
 	 * /tree, so this works from the state alone and never from what it turned off in memory.
@@ -101,8 +111,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		const all = new Set(pi.getAllTools().map((t) => t.name));
 		let next: string[];
 		if (state.mode === "architect") {
-			const architect = [...all].filter(isArchitectTool);
-			next = [...new Set([...active.filter((n) => !OFF_IN_ARCHITECT.includes(n)), ...architect])];
+			const wanted = phaseTools(state.architecture).filter((n) => all.has(n));
+			const kept = active.filter((n) => !OFF_IN_ARCHITECT.includes(n) && (!isArchitectTool(n) || wanted.includes(n)));
+			next = [...new Set([...kept, ...wanted])];
 		} else {
 			const keptOff = state.keptOff;
 			const back = keptOff ? OFF_IN_ARCHITECT.filter((n) => all.has(n) && !keptOff.includes(n)) : [];
@@ -110,6 +121,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		}
 		if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
 	}
+
+	/** What the active tools depend on. */
+	const toolKey = (s: ArchitectState) =>
+		s.mode === "architect" ? `architect:${phaseTools(s.architecture).join(",")}` : "build";
 
 	/** The event that switches mode. Entering architect mode remembers which write tools were already off. */
 	function modeEvent(mode: Mode): EventInput {
@@ -165,9 +180,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	function append(input: EventInput): void {
 		const e: ArchitectEvent = event(input);
 		pi.appendEntry(ENTRY_TYPE, e);
-		const before = state.mode;
+		const before = toolKey(state);
 		state = reduce(state, e);
-		if (state.mode !== before) applyTools();
+		// A mode switch or a phase approval changes the tools, also in the middle of a run: Pi declares
+		// the new set before the next request.
+		if (toolKey(state) !== before) applyTools();
 		refresh();
 	}
 
@@ -300,9 +317,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		type: "string",
 	});
 
-	const tools = { state: () => state, append, has };
+	const tools = { state: () => state, append };
 	registerUpdateTool(pi, tools);
-	registerAdvanceTool(pi, { ...tools, review, now, finalize: writePlanFile, planTarget });
+	const gate = { ...tools, review, now, finalize: writePlanFile, planTarget };
+	registerAdvanceTool(pi, gate);
 	registerDiagramTool(pi, tools);
 	registerDecideTool(pi, { ...tools, ui: overrides.decide ?? createDecisionCard(screens) });
 	registerSliceTool(pi, tools);
@@ -414,6 +432,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	/** The subcommands, in the order the completion and the picker show them. */
 	const SUBCOMMANDS: readonly { value: Subcommand; description: string; pick: string }[] = [
 		{ value: "board", description: "See the whole architecture on one screen", pick: "Open the board" },
+		{
+			value: "review",
+			description: "Review the current phase, e.g. after closing its review",
+			pick: "Review this phase",
+		},
 		{ value: "plan", description: "Show the plan and its progress, with actions", pick: "Plan: path and actions" },
 		{ value: "build", description: "Switch to build mode: normal Pi with all tools", pick: "Switch to build mode" },
 		{ value: "reset", description: "Discard the architecture in this session", pick: "Discard the architecture" },
@@ -426,12 +449,17 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			return;
 		}
 		if (sub === "board") await showBoard(ctx);
+		else if (sub === "review")
+			await reviews.reopen(gate, ctx, (content) =>
+				pi.sendMessage({ customType: REVIEW_MESSAGE, content, display: false }, { triggerTurn: true }),
+			);
 		else if (sub === "build") await setMode("build", ctx);
 		else await reset(ctx);
 	}
 
 	pi.registerCommand("architect", {
-		description: "Architect a feature before building it: /architect <feature>, or board, plan, build and reset",
+		description:
+			"Architect a feature before building it: /architect <feature>, or board, review, plan, build and reset",
 		getArgumentCompletions: (prefix) => {
 			const text = prefix.trimStart().toLowerCase();
 			const planArg = /^plan\s+(\S*)$/.exec(text);
@@ -461,9 +489,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			}
 			// Already in architect mode: offer what there is to do.
 			const feature = state.architecture?.feature;
+			const offered = SUBCOMMANDS.filter((s) => s.value !== "review" || reviews.canReview(state));
 			const picked = await ctx.ui.select(
 				`Architect mode${feature ? `: ${feature}` : ""}`,
-				SUBCOMMANDS.map((s) => s.pick),
+				offered.map((s) => s.pick),
 			);
 			const choice = SUBCOMMANDS.find((s) => s.pick === picked);
 			if (choice) await run(choice.value, "", ctx);
@@ -529,8 +558,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		ctxRef = ctx;
 		const sections = event.systemPromptOptions.sections;
 		const section =
-			architectSection(state, has) ??
-			(state.mode === "build" && state.plan ? buildSection(state.plan, progress) : undefined);
+			architectSection(state, {
+				drawingRulesInContext:
+					state.architecture !== undefined &&
+					drawingRulesInContext(ctx.sessionManager.getBranch(), state.architecture.phase),
+			}) ?? (state.mode === "build" && state.plan ? buildSection(state.plan, progress) : undefined);
 		if (section) sections[SECTION] = section;
 		else delete sections[SECTION];
 		if (modeToldToModel(ctx.sessionManager.getBranch()) === state.mode) return;

@@ -1,6 +1,7 @@
 import { PHASE_LABEL } from "../state/phases.ts";
 import type { AdvanceDetails, AdvanceInput } from "../tools/advance.ts";
 import type { UpdateDetails, UpdateInput } from "../tools/update.ts";
+import { REOPEN_HINT } from "../reopen.ts";
 import type { Paint } from "./paint.ts";
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -73,7 +74,7 @@ export function advanceResult(
 		case "changes":
 			return paint.fg("warning", `↻ changes requested for ${label}`) + comment;
 		case "closed":
-			return paint.fg("dim", `■ ${label} review closed without a decision`);
+			return paint.fg("dim", `■ ${label} review closed without a verdict · ${REOPEN_HINT}`);
 		case "not-ready":
 			return paint.fg("warning", `○ ${label} not ready: needs ${(details.missing ?? []).join(", ")}`);
 		case "no-ui":

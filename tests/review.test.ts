@@ -148,7 +148,10 @@ describe("tool rows", () => {
 			r({ phase: "frame", outcome: "changes", comment: "tighten" }),
 			'↻ changes requested for Frame  "tighten"',
 		);
-		assert.equal(r({ phase: "frame", outcome: "closed" }), "■ Frame review closed without a decision");
+		assert.equal(
+			r({ phase: "frame", outcome: "closed" }),
+			"■ Frame review closed without a verdict · /architect review opens it again",
+		);
 		assert.equal(r({ phase: "slice", outcome: "not-ready", missing: ["a", "b"] }), "○ Slice not ready: needs a, b");
 		assert.equal(r({ phase: "slice", outcome: "not-ready" }), "○ Slice not ready: needs ");
 		assert.equal(r({ phase: "frame", outcome: "no-ui" }), "■ no interactive UI to review Frame");

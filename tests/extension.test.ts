@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, FLAG, SHORTCUT, WIDGET_KEY } from "../src/index.ts";
 import { MODE_MESSAGE, SECTION } from "../src/prompt.ts";
+import { REVIEW_MESSAGE } from "../src/reopen.ts";
 import { rebuild } from "../src/state/reducer.ts";
 import { STATUS_KEY } from "../src/ui/status.ts";
 import { harness } from "./harness.ts";
@@ -59,7 +60,7 @@ describe("registration", () => {
 		const all = complete("")!;
 		assert.deepEqual(
 			all.map((i) => i.value),
-			["board", "plan", "build", "reset"],
+			["board", "review", "plan", "build", "reset"],
 		);
 		for (const item of all) assert.ok(item.description);
 		assert.deepEqual(
@@ -68,7 +69,7 @@ describe("registration", () => {
 		);
 		assert.deepEqual(
 			complete("re")!.map((i) => i.value),
-			["reset"],
+			["review", "reset"],
 		);
 		assert.deepEqual(
 			complete("plan ")!.map((i) => [i.value, i.label]),
@@ -513,13 +514,53 @@ describe("architect_advance", () => {
 	});
 
 	it("a closed review stops the agent and puts the phase back to working", async () => {
-		const ui = new FakeUi().keys([KEYS.escape]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter]);
 		const h = await architecting(ui);
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		const result = await h.call("architect_advance", {});
 		assert.equal(result.terminate, true);
 		assert.equal(result.details?.outcome, "closed");
+		assert.match(result.content[0]!.text, /The user closed the Frame review without a decision/);
 		assert.equal(rebuild(h.branch).architecture!.status, "working");
+		assert.equal(ui.notifications.at(-1)!.message, "Frame review closed. /architect review opens it again.");
+	});
+
+	it("/architect review opens a closed review again, with the agent's summary, and tells the agent the verdict", async () => {
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter], [KEYS.enter]);
+		const h = await architecting(ui);
+		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
+		await h.call("architect_advance", { summary: "Check the goal." });
+		ui.script({ select: ["Review this phase"] });
+		await h.command("architect");
+		assert.ok(
+			ui.customs[1]!.frames[0]!.some((l) => l.includes("Check the goal.")),
+			"the same summary",
+		);
+		assert.equal(rebuild(h.branch).architecture!.phase, "explore");
+		const sent = h.sent.at(-1)!;
+		assert.equal(sent.message.customType, REVIEW_MESSAGE);
+		assert.match(
+			String(sent.message.content),
+			/^The user opened the Frame review again with \/architect review\.\nFrame approved\./,
+		);
+		assert.deepEqual(sent.options, { triggerTurn: true });
+	});
+
+	it("/architect review says why there is nothing to open", async () => {
+		const ui = new FakeUi();
+		const h = await architecting(ui);
+		ui.script({ select: [undefined] });
+		await h.command("architect");
+		assert.ok(!(ui.prompts[0]!.detail as string[]).includes("Review this phase"), "not offered while incomplete");
+		await h.command("architect", "review");
+		assert.match(ui.notifications.at(-1)!.message, /^Frame is not ready for review yet\. It still needs /);
+		await h.command("architect", "build");
+		await h.command("architect", "review");
+		assert.equal(
+			ui.notifications.at(-1)!.message,
+			"There is no phase to review. /architect <feature> starts an architecture.",
+		);
+		assert.deepEqual(ui.customs, []);
 	});
 
 	it("takes a custom review screen, and approving the Blueprint makes the plan final", async () => {

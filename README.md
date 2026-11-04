@@ -42,6 +42,7 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | `/architect <feature>`           | Architect mode, on a new feature                                  |
 | `/architect build`               | Switch to build mode                                              |
 | `/architect board`, `ctrl+alt+b` | See the whole design on one screen                                |
+| `/architect review`              | Review the current phase, e.g. again after closing its review     |
 | `/architect plan`                | Show the plan and its progress, with actions                      |
 | `/architect plan open`           | Open the plan file                                                |
 | `/architect plan write`          | Write the plan file again when it is missing                      |
@@ -50,11 +51,12 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | `ctrl+alt+a`                     | Toggle the mode                                                   |
 | `pi --architect`                 | Start in architect mode                                           |
 
-`build`, `board`, `plan` and `reset` are reserved. A feature name cannot start with one of them.
+`build`, `board`, `review`, `plan` and `reset` are reserved. A feature name cannot start with one of them.
 `/architect plan` alone also offers to build the plan in this session or to copy its path.
 
 On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
 On a review screen: ↑/↓, PgUp/PgDn, space, Home and End scroll, ↵ approves, `r` requests changes, `b` opens the board, esc closes.
+Closing a review without a verdict stops the agent, so esc asks first. `/architect review` opens it again.
 
 The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
 Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.
