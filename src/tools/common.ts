@@ -51,6 +51,34 @@ export function readiness(phase: Phase, gaps: readonly string[]): string {
 }
 
 /**
+ * How often a tool rejected each kind of problem in a row. A model that keeps sending the same mistake
+ * gets a concrete example of a value that passes, instead of the same sentence again.
+ */
+export class Rejections {
+	private readonly counts = new Map<string, number>();
+
+	/** Count one rejection of each kind. Kinds that did not come up again start over. */
+	record(kinds: Iterable<string>): void {
+		const now = new Set(kinds);
+		for (const kind of [...this.counts.keys()]) if (!now.has(kind)) this.counts.delete(kind);
+		for (const kind of now) this.counts.set(kind, (this.counts.get(kind) ?? 0) + 1);
+	}
+
+	/** How many rejections in a row had this kind. */
+	count(kind: string): number {
+		return this.counts.get(kind) ?? 0;
+	}
+
+	/** The call passed. */
+	clear(): void {
+		this.counts.clear();
+	}
+}
+
+/** From this many rejections of one kind in a row, the error shows what passes. */
+export const EXAMPLE_AFTER = 2;
+
+/**
  * A `renderCall` or `renderResult` that draws one text. Pi passes the component of the last render,
  * so the call row and the result row reuse one `Text`.
  */

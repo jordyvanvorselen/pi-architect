@@ -4,6 +4,7 @@ import { buildGroups, buildOrder, orderLine } from "../src/plan/order.ts";
 import { event } from "../src/state/events.ts";
 import { newArchitecture, reduce } from "../src/state/reducer.ts";
 import type { Architecture, Slice } from "../src/state/types.ts";
+import { Rejections } from "../src/tools/common.ts";
 import { planSlices, prepareSliceArgs, sliceErrors, type SliceInput } from "../src/tools/slice.ts";
 import { sliceCall, sliceResult } from "../src/ui/slice.ts";
 import { plainTheme, tagTheme } from "./helpers.ts";
@@ -80,7 +81,7 @@ describe("sliceErrors", () => {
 	it("reports missing, malformed and duplicate ids", () => {
 		assert.deepEqual(sliceErrors([{ ...slice(""), title: "t" }, slice("has space"), slice("s1"), slice("s1")]), [
 			"slice 1: needs an id.",
-			'has space: the id must be short, without spaces, e.g. "s1".',
+			'has space: the id must be up to 32 letters, digits, dots, dashes or underscores, e.g. "s1".',
 			"s1: the id is used twice. Ids must be unique.",
 		]);
 	});
@@ -103,39 +104,63 @@ describe("sliceErrors", () => {
 			"s1: needs at least one verify command.",
 		]);
 		assert.deepEqual(sliceErrors([{ ...slice("s1"), title: "x".repeat(81), goal: "g" }]), [
-			"s1: the title is longer than 80 characters.",
+			"s1: the title has 81 characters, more than 80. Put the detail in the goal.",
 		]);
 	});
 
-	it("rejects steps a builder cannot act on", () => {
-		const steps = [
-			"TBD",
-			"implement it",
-			"do stuff",
-			"Wire up the handler etc.",
-			"Add the cache layer TODO",
-			"Add the store ...",
-		];
+	it("rejects a step that is only a placeholder, quoting the whole step and saying what matched", () => {
+		const steps = ["TBD", "implement it", "do stuff", "…", "etc.", "FIXME", "TODO: wire the cache into src/cache.ts"];
 		const errors = sliceErrors([{ ...slice("s1"), goal: "g", steps }]);
+		const fix = "Write the change itself, naming the file, function or type.";
 		assert.deepEqual(errors, [
-			's1: step 1 "TBD" is a placeholder. Name the file, function or type and the change.',
-			's1: step 2 "implement it" is a placeholder. Name the file, function or type and the change.',
-			's1: step 3 "do stuff" is too short to act on. Name the file, function or type and the change.',
-			's1: step 4 "Wire up the handler etc." is a placeholder. Name the file, function or type and the change.',
-			's1: step 5 "Add the cache layer TODO" is a placeholder. Name the file, function or type and the change.',
-			's1: step 6 "Add the store ..." is a placeholder. Name the file, function or type and the change.',
+			`s1: step 1 is only a placeholder: "TBD". ${fix}`,
+			`s1: step 2 is only a placeholder: "implement it". ${fix}`,
+			`s1: step 3 has two words and names no file, function or type: "do stuff". ${fix}`,
+			`s1: step 4 is only a placeholder: "…". ${fix}`,
+			`s1: step 5 is only a placeholder: "etc.". ${fix}`,
+			`s1: step 6 is only a placeholder: "FIXME". ${fix}`,
+			`s1: step 7 starts with "TODO:", which marks it as unfinished: "TODO: wire the cache into src/cache.ts". ${fix}`,
 		]);
-		const long = sliceErrors([{ ...slice("s1"), goal: "g", steps: [`TBD ${"x".repeat(60)}`] }]);
-		assert.match(long[0]!, /step 1 "TBD x{35}…" is a placeholder/);
+		const long = `TBD: ${"x".repeat(60)}`;
+		assert.ok(sliceErrors([{ ...slice("s1"), steps: [long] }])[0]!.includes(JSON.stringify(long)));
+	});
+
+	it("accepts real steps that contain todo, tbd, fixme, etc or an ellipsis as words", () => {
+		const steps = [
+			"Delete the todo from the Map",
+			"Add a TODO list component to src/todos.tsx",
+			"Rename the tbd flag in src/config.ts to pending",
+			"Remove every FIXME comment from src/legacy.ts",
+			"Wire up the handler etc.",
+			"Add the store ...",
+			"Ask the user ??? before deleting",
+			"Delete src/old.ts",
+			"Export dedupKey()",
+			"Rename fooBar",
+		];
+		assert.deepEqual(sliceErrors([{ ...slice("s1"), steps }]), []);
+	});
+
+	it("only calls a step too short when it has one word, or two words that name nothing", () => {
+		const errors = sliceErrors([{ ...slice("s1"), steps: ["Refactor", "do stuff", "Delete src/old.ts"] }]);
+		assert.deepEqual(
+			errors.map((e) => e.split(":")[1]!.trim()),
+			[
+				"step 1 has one word and names no file, function or type",
+				"step 2 has two words and names no file, function or type",
+			],
+		);
 	});
 
 	it("rejects verify entries that are not commands", () => {
 		const verify = ["tests pass", "Manual check", "it works.", "npm test"];
+		const fix = 'describes a check instead of being one. Give the exact shell command, e.g. "npm test".';
 		assert.deepEqual(sliceErrors([{ ...slice("s1"), goal: "g", verify }]), [
-			's1: verify "tests pass" is not a command. Give the exact command, e.g. "npm test".',
-			's1: verify "Manual check" is not a command. Give the exact command, e.g. "npm test".',
-			's1: verify "it works." is not a command. Give the exact command, e.g. "npm test".',
+			`s1: verify "tests pass" ${fix}`,
+			`s1: verify "Manual check" ${fix}`,
+			`s1: verify "it works." ${fix}`,
 		]);
+		assert.deepEqual(sliceErrors([{ ...slice("s1"), verify: ["make check", "npm run verify"] }]), []);
 	});
 });
 
@@ -234,6 +259,28 @@ describe("planSlices", () => {
 			"The slices were not saved. Fix this and send the full list again:\n- Send at least one slice.",
 		);
 		assert.match(error(at(), [{ id: "s1" } as In]), /s1: needs a title/);
+	});
+
+	it("shows what passes once the same kind of problem is rejected twice in a row, and forgets after a save", () => {
+		const rejections = new Rejections();
+		const send = (slices: In[]) => {
+			try {
+				planSlices(at(), { slices }, undefined, rejections);
+				return "saved";
+			} catch (e) {
+				return (e as Error).message;
+			}
+		};
+		const vague = good("s1", [], { steps: ["TBD"], files: ["src/todo-store.ts"] });
+		assert.doesNotMatch(send([vague]), /What passes/);
+		const second = send([vague]);
+		assert.match(second, /The same problem came back\. What passes:\n- A step that passes is one sentence/);
+		assert.match(second, /"In src\/todo-store\.ts, add removeItem\(id\)/);
+		// Another kind starts its own count.
+		assert.doesNotMatch(send([good("s1", [], { verify: ["tests pass"] })]), /What passes/);
+		assert.match(send([good("s1", [], { verify: ["tests pass"] })]), /npm test -- tests\/s1\.test\.ts/);
+		assert.equal(send([good("s1")]), "saved");
+		assert.doesNotMatch(send([good("s1", [], { verify: ["tests pass"] })]), /What passes/);
 	});
 
 	it("works in Slice and Blueprint only, and never on an approved plan", () => {

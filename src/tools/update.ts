@@ -147,7 +147,8 @@ export function planUpdate(
 	const update: Omit<UpdateEvent, "v"> = { type: "update", phase };
 
 	const feature = input.feature?.trim();
-	if (feature) {
+	// Sending the name it already has changes nothing, so it is no reason to reject the call.
+	if (feature && feature !== arch.feature) {
 		if (phase !== "frame" && arch.feature)
 			throw new Error(`The feature is named "${arch.feature}" and Frame is approved.`);
 		update.feature = { name: feature, slug: slugify(feature) };
@@ -222,7 +223,10 @@ export function planUpdate(
 			const text = r.text.trim();
 			if (!text) throw new Error("Every risk needs a text.");
 			const old = r.id ? arch.risks.find((x) => x.id === r.id) : undefined;
-			if (r.id && !old) throw new Error(`Unknown risk ${r.id}. Risks: ${ids.join(", ") || "none"}.`);
+			if (r.id && !old)
+				throw new Error(
+					`There is no risk ${r.id} to change. Risks: ${ids.join(", ") || "none"}. Omit id to add a new risk.`,
+				);
 			const id = old?.id ?? nextId(ids, "r");
 			if (!old) ids.push(id);
 			(old ? changed : added).push(id);
@@ -247,7 +251,10 @@ export function planUpdate(
 			...arch.diagrams.map((d) => d.id),
 		]);
 		const unknown = remove.filter((id) => !known.has(id));
-		if (unknown.length) throw new Error(`Nothing to remove with id ${unknown.join(", ")}.`);
+		if (unknown.length)
+			throw new Error(
+				`Nothing to remove with id ${unknown.join(", ")}. remove takes ids of findings, risks or diagrams, or module paths: ${[...known].join(", ") || "there are none yet"}.`,
+			);
 		update.remove = remove;
 		changes.push(`removed ${remove.join(", ")}`);
 	}
