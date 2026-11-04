@@ -77,6 +77,16 @@ describe("diagram repair", () => {
 		assert.equal(repairs.length, 2);
 	});
 
+	it("says so when moving a side draws a line into the cell it left", () => {
+		const { repairs } = repairBody(fixture("bad", "junction-outside.txt"));
+		assert.deepEqual(
+			repairs.map((r) => r.message),
+			[
+				"moved the box side ┤ to col 7 on line 2 (it was at col 6), in line with the box opened at line 1 col 7, and drew ─ at col 6",
+			],
+		);
+	});
+
 	it("does not move a side that a line above or below belongs to", () => {
 		// Line 3 misses its right side, and the │ next to it is a divider that runs on from line 2.
 		const lines = ["╭───────╮", "│ Pan  ││", "│ Pro  │", "╰──────┴╯"];
