@@ -306,6 +306,15 @@ describe("persistence", () => {
 		assert.deepEqual(second.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
 	});
 
+	it("brings edit and write back after /tree to before architect mode left the architect tool set on", async () => {
+		const first = await architecting();
+		const restored = first.active();
+		// The branch before architect mode: nothing records what architect mode turned off.
+		const h = harness({ ui: new FakeUi(), branch: [], activeTools: restored });
+		await h.fire("session_tree", {});
+		assert.deepEqual(h.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
+	});
+
 	it("keeps a write tool off in build mode when the user had it off before architect mode", async () => {
 		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash", "edit"] });
 		await h.fire("session_start", { reason: "startup" });
