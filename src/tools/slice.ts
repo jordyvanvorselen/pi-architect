@@ -7,7 +7,18 @@ import { missing, sliceProblems } from "../state/queries.ts";
 import type { Architecture, Slice } from "../state/types.ts";
 import type { Paint } from "../ui/paint.ts";
 import { sliceCall, sliceResult } from "../ui/slice.ts";
-import { architecture, clean, List, parseJson, readiness, textOf, textRow, type ToolDeps } from "./common.ts";
+import {
+	architecture,
+	clean,
+	EXAMPLE_AFTER,
+	List,
+	parseJson,
+	readiness,
+	Rejections,
+	textOf,
+	textRow,
+	type ToolDeps,
+} from "./common.ts";
 
 export const SliceParams = Type.Object(
 	{
@@ -62,52 +73,108 @@ export function prepareSliceArgs(raw: unknown): SliceInput {
 const SLICE_PHASES: readonly Phase[] = ["slice", "blueprint"];
 
 const ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,31}$/;
-/** Placeholders that say nothing a builder can act on. */
-const VAGUE_STEP =
-	/^(?:tbd|todo|wip|n\/a|implement(?: it| this| the feature)?|do it|fix(?: it)?|misc|etc\.?|\.\.\.|…|same as above)$/i;
-const PLACEHOLDER = /\b(?:tbd|todo|fixme)\b|\?\?\?|\.\.\.$|…$|\betc\.?$/i;
+/**
+ * A whole step that says nothing a builder can act on. Only the entire step counts: "Delete the todo from
+ * the Map" is a real step that happens to contain the word.
+ */
+const PLACEHOLDER_STEP =
+	/^(?:tbd|todo|fixme|wip|n\/a|implement(?: it| this| the feature)?|do it|fix(?: it)?|misc|etc|\.\.\.|…|\?+|same as above)[.!]*$/i;
+/** A step that opens with a marker saying it is unfinished, like "TODO: wire the cache". */
+const PLACEHOLDER_PREFIX = /^(todo|tbd|fixme)\s*:/i;
+/** Something a builder can find: a path, a call, a file extension, an identifier or code in backticks. */
+const CONCRETE = /[/`(_]|\.[a-z]{1,5}\b|[a-z][A-Z]/;
+/** A verify entry that describes a check instead of being one. The whole entry must match. */
 const VAGUE_VERIFY =
 	/^(?:tests?(?: pass(?:es)?)?|it works|works|manual(?:ly)?(?: (?:check|test(?:ing)?|qa))?|check|verify|review|tbd|todo|n\/a|run (?:the )?tests?)\.?$/i;
 
-const quote = (text: string) => JSON.stringify(text.length > 40 ? `${text.slice(0, 39)}…` : text);
+/** One problem with the slices, with its kind so a repeat can get an example. */
+export interface SliceIssue {
+	kind: "slices" | "id" | "title" | "goal" | "files" | "steps" | "placeholder" | "short" | "verify" | "graph";
+	text: string;
+}
 
-/** Problems with one step, or undefined when a builder can act on it. */
-function stepProblem(step: string): string | undefined {
-	if (VAGUE_STEP.test(step) || PLACEHOLDER.test(step)) return "is a placeholder";
-	if (step.split(/\s+/).length < 3 || step.length < 12) return "is too short to act on";
+/** Problems with one step, or undefined when a builder can act on it. Says exactly what matched. */
+function stepProblem(step: string): (Omit<SliceIssue, "text"> & { why: string }) | undefined {
+	if (PLACEHOLDER_STEP.test(step)) return { kind: "placeholder", why: "is only a placeholder" };
+	const prefix = PLACEHOLDER_PREFIX.exec(step);
+	if (prefix) return { kind: "placeholder", why: `starts with "${prefix[0]}", which marks it as unfinished` };
+	const words = step.split(/\s+/).length;
+	if (words < 2 || (words < 3 && !CONCRETE.test(step)))
+		return {
+			kind: "short",
+			why: `has ${words === 1 ? "one word" : "two words"} and names no file, function or type`,
+		};
 	return undefined;
 }
 
-/** Everything wrong with the slices, one line each, so the model can fix them all in one go. */
-export function sliceErrors(slices: readonly Slice[]): string[] {
-	const errors: string[] = [];
-	if (!slices.length) errors.push("Send at least one slice.");
+/** Everything wrong with the slices, one issue each, so the model can fix them all in one go. */
+export function sliceIssues(slices: readonly Slice[]): SliceIssue[] {
+	const issues: SliceIssue[] = [];
+	const add = (kind: SliceIssue["kind"], text: string) => issues.push({ kind, text });
+	if (!slices.length) add("slices", "Send at least one slice.");
 	const seen = new Set<string>();
 	slices.forEach((s, i) => {
 		const name = s.id || `slice ${i + 1}`;
-		if (!s.id) errors.push(`slice ${i + 1}: needs an id.`);
-		else if (!ID.test(s.id)) errors.push(`${name}: the id must be short, without spaces, e.g. "s1".`);
-		else if (seen.has(s.id)) errors.push(`${name}: the id is used twice. Ids must be unique.`);
+		if (!s.id) add("id", `slice ${i + 1}: needs an id.`);
+		else if (!ID.test(s.id))
+			add("id", `${name}: the id must be up to 32 letters, digits, dots, dashes or underscores, e.g. "s1".`);
+		else if (seen.has(s.id)) add("id", `${name}: the id is used twice. Ids must be unique.`);
 		seen.add(s.id);
-		if (!s.title) errors.push(`${name}: needs a title.`);
-		else if (s.title.length > 80) errors.push(`${name}: the title is longer than 80 characters.`);
-		if (!s.goal) errors.push(`${name}: needs a goal, one sentence on what is true once it is built.`);
-		if (!s.files.length) errors.push(`${name}: needs at least one file it creates or changes.`);
-		if (!s.steps.length) errors.push(`${name}: needs at least one step.`);
+		if (!s.title) add("title", `${name}: needs a title.`);
+		else if (s.title.length > 80)
+			add("title", `${name}: the title has ${s.title.length} characters, more than 80. Put the detail in the goal.`);
+		if (!s.goal) add("goal", `${name}: needs a goal, one sentence on what is true once it is built.`);
+		if (!s.files.length) add("files", `${name}: needs at least one file it creates or changes.`);
+		if (!s.steps.length) add("steps", `${name}: needs at least one step.`);
 		s.steps.forEach((step, j) => {
 			const problem = stepProblem(step);
 			if (problem)
-				errors.push(
-					`${name}: step ${j + 1} ${quote(step)} ${problem}. Name the file, function or type and the change.`,
+				add(
+					problem.kind,
+					`${name}: step ${j + 1} ${problem.why}: ${JSON.stringify(step)}. Write the change itself, naming the file, function or type.`,
 				);
 		});
-		if (!s.verify.length) errors.push(`${name}: needs at least one verify command.`);
+		if (!s.verify.length) add("verify", `${name}: needs at least one verify command.`);
 		for (const command of s.verify)
 			if (VAGUE_VERIFY.test(command))
-				errors.push(`${name}: verify ${quote(command)} is not a command. Give the exact command, e.g. "npm test".`);
+				add(
+					"verify",
+					`${name}: verify ${JSON.stringify(command)} describes a check instead of being one. Give the exact shell command, e.g. "npm test".`,
+				);
 	});
-	errors.push(...sliceProblems(slices).map((p) => `${p}.`));
-	return errors;
+	for (const problem of sliceProblems(slices)) add("graph", `${problem}.`);
+	return issues;
+}
+
+/** Every problem with the slices, one line each. */
+export function sliceErrors(slices: readonly Slice[]): string[] {
+	return sliceIssues(slices).map((i) => i.text);
+}
+
+/** What a value that passes looks like, for a kind the model got wrong twice in a row. */
+function example(kind: SliceIssue["kind"], slices: readonly Slice[]): string | undefined {
+	const file = slices.find((s) => s.files.length)?.files[0] ?? "src/store.ts";
+	const id = slices.find((s) => s.id && ID.test(s.id))?.id ?? "s1";
+	switch (kind) {
+		case "placeholder":
+		case "short":
+		case "steps":
+			return `A step that passes is one sentence a builder can follow, e.g. "In ${file}, add removeItem(id) that deletes the item from the Map and returns true when it existed."`;
+		case "verify":
+			return `A verify entry that passes is a shell command that exits 0 once the slice is done, e.g. "npm test -- tests/${id}.test.ts" or "npx tsc --noEmit".`;
+		case "id":
+			return 'Ids that pass: "s1", "s2", "store-key". Every slice needs its own.';
+		case "goal":
+			return 'A goal that passes: "Deleting an item removes it from the store and the list."';
+		case "files":
+			return `Files that pass: ["${file}", "tests/${id}.test.ts"].`;
+		case "title":
+			return 'A title that passes: "Store the dedup key".';
+		case "graph":
+			return `depends_on lists ids of other slices in this call, without cycles, e.g. "depends_on": ["${id}"], or [] for none.`;
+		case "slices":
+			return undefined;
+	}
 }
 
 export interface SliceDetails {
@@ -139,6 +206,7 @@ export function planSlices(
 	arch: Architecture,
 	input: SliceInput,
 	has: (tool: string) => boolean = () => true,
+	rejections?: Rejections,
 ): SlicePlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
@@ -156,14 +224,23 @@ export function planSlices(
 			verify: clean(s.verify),
 		};
 	});
-	const errors = sliceErrors(slices);
-	if (errors.length)
+	const issues = sliceIssues(slices);
+	if (issues.length) {
+		const kinds = [...new Set(issues.map((i) => i.kind))];
+		rejections?.record(kinds);
+		const examples = kinds
+			.filter((k) => (rejections?.count(k) ?? 0) >= EXAMPLE_AFTER)
+			.map((k) => example(k, slices))
+			.filter((e) => e !== undefined);
 		throw new Error(
 			[
-				`The slices were not saved. Fix ${errors.length === 1 ? "this" : "these"} and send the full list again:`,
-				...errors.map((e) => `- ${e}`),
+				`The slices were not saved. Fix ${issues.length === 1 ? "this" : "these"} and send the full list again:`,
+				...issues.map((e) => `- ${e.text}`),
+				...(examples.length ? ["The same problem came back. What passes:", ...examples.map((e) => `- ${e}`)] : []),
 			].join("\n"),
 		);
+	}
+	rejections?.clear();
 
 	const old = new Map(arch.slices.map((s) => [s.id, s]));
 	const added = slices.filter((s) => !old.has(s.id)).map((s) => s.id);
@@ -195,6 +272,7 @@ export function planSlices(
 
 /** Register `architect_slice`. Inactive by default, like every architect tool; architect mode turns it on. */
 export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (tool: string) => boolean }): void {
+	const rejections = new Rejections();
 	pi.registerTool({
 		name: "architect_slice",
 		label: "Architect slice",
@@ -210,7 +288,7 @@ export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (to
 		defaultActive: false,
 		prepareArguments: prepareSliceArgs,
 		async execute(_toolCallId, params) {
-			const plan = planSlices(architecture(deps.state(), "architect_slice"), params, deps.has);
+			const plan = planSlices(architecture(deps.state(), "architect_slice"), params, deps.has, rejections);
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
 		},

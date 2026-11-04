@@ -139,11 +139,17 @@ export function planDecision(state: ArchitectState, input: DecideInput): Decisio
 	});
 	if (options.length < 2 || options.length > 4) throw new Error("Give 2 to 4 options.");
 	const wanted = input.recommended.trim();
+	// "B", "Option B", "B) In backend", "2" and the option's title all name option B.
+	const letter = /^(?:option\s+)?([a-h])(?:$|[\s).:,-])/i.exec(wanted)?.[1];
 	const recommended =
 		options.find((o) => same(o.id, wanted)) ??
 		options.find((o) => same(o.title, wanted)) ??
-		options[Number(wanted) - 1];
-	if (!recommended) throw new Error(`Recommend one of the options by letter: ${options.map((o) => o.id).join(", ")}.`);
+		(letter ? options.find((o) => same(o.id, letter)) : undefined) ??
+		(/^\d+$/.test(wanted) ? options[Number(wanted) - 1] : undefined);
+	if (!recommended)
+		throw new Error(
+			`recommended ${JSON.stringify(wanted)} names none of the options. Give the letter of one: ${options.map((o) => `"${o.id}" (${o.title})`).join(", ")}.`,
+		);
 
 	let id: string;
 	if (input.id) {

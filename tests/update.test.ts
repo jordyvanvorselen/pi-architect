@@ -65,6 +65,12 @@ describe("planUpdate", () => {
 		assert.ok(planUpdate(at({ phase: "explore", feature: "" }), { feature: "Late name" }));
 	});
 
+	it("accepts the name the feature already has in a later phase, as no change", () => {
+		const plan = planUpdate(at({ phase: "explore" }), { feature: "Dedupe", risks: [{ text: "ordering" }] });
+		assert.equal(plan.event.feature, undefined);
+		assert.deepEqual(plan.details.changes, ["+1 risk (r1)"]);
+	});
+
 	it("says what the phase still needs", () => {
 		const plan = planUpdate(at({ feature: "" }), { brief: { goal: "g" } });
 		assert.equal(plan.text, "Updated brief: goal. Frame still needs a feature name, at least one done-when.");
@@ -119,7 +125,10 @@ describe("planUpdate", () => {
 		const plan = planUpdate(arch, { risks: [{ id: "r1", text: "ordering" }] });
 		assert.deepEqual(plan.event.risks, [{ id: "r1", text: "ordering", severity: "high", mitigation: "m" }]);
 		assert.deepEqual(plan.details.changes, ["changed r1"]);
-		assert.throws(() => planUpdate(arch, { risks: [{ id: "r9", text: "x" }] }), /Unknown risk r9\. Risks: r1\./);
+		assert.throws(
+			() => planUpdate(arch, { risks: [{ id: "r9", text: "x" }] }),
+			/There is no risk r9 to change\. Risks: r1\. Omit id to add a new risk\./,
+		);
 		assert.throws(() => planUpdate(at(), { risks: [{ id: "r9", text: "x" }] }), /Risks: none/);
 		assert.throws(() => planUpdate(arch, { risks: [{ text: "  " }] }), /needs a text/);
 	});
@@ -133,7 +142,10 @@ describe("planUpdate", () => {
 		const plan = planUpdate(arch, { remove: ["src", "f1"] });
 		assert.deepEqual(plan.details.changes, ["removed src, f1"]);
 		assert.deepEqual(plan.details.missing, ["at least one touched or new module"]);
-		assert.throws(() => planUpdate(arch, { remove: ["f9"] }), /Nothing to remove with id f9/);
+		assert.throws(
+			() => planUpdate(arch, { remove: ["f9"] }),
+			/Nothing to remove with id f9\. remove takes ids of findings, risks or diagrams, or module paths: f1, src\./,
+		);
 	});
 
 	it("refuses an empty update and any change to an approved plan", () => {

@@ -253,7 +253,10 @@ describe("planning a decision", () => {
 			/needs a title/,
 		);
 		assert.throws(() => planDecision(s, input({ options: [INPUT.options[0]!] })), /2 to 4 options/);
-		assert.throws(() => planDecision(s, input({ recommended: "Z" })), /by letter: A, B, C/);
+		assert.throws(
+			() => planDecision(s, input({ recommended: "Z" })),
+			/recommended "Z" names none of the options\. Give the letter of one: "A" \(In processor\), "B"/,
+		);
 		assert.throws(() => planDecision(s, input({ id: "q9" })), /Unknown decision q9\. Decisions: none/);
 	});
 
@@ -261,6 +264,9 @@ describe("planning a decision", () => {
 		const s = state(inDecide());
 		assert.equal(planDecision(s, input({ recommended: "in backend" })).recommendation, "B");
 		assert.equal(planDecision(s, input({ recommended: "3" })).recommendation, "C");
+		for (const wanted of ["Option B", "b", "B) In backend", "B: has DB context"])
+			assert.equal(planDecision(s, input({ recommended: wanted })).recommendation, "B", wanted);
+		assert.throws(() => planDecision(s, input({ recommended: "Both" })), /names none of the options/);
 		const d = planDecision(
 			s,
 			input({
