@@ -185,13 +185,21 @@ export function harness(
 
 	/** Run before_agent_start like Pi, and keep an injected message on the branch like Pi does. */
 	const startRun = async (messageType: "user" | "custom" = "user") => {
-		const systemPromptOptions = { sections: {} as Record<string, string> };
+		const before = [...active];
+		const systemPromptOptions = { sections: {} as Record<string, string>, selectedTools: [...before] };
 		const result = (await fire("before_agent_start", {
 			messageType,
 			prompt: "hi",
 			systemPrompt: "",
 			systemPromptOptions,
 		})) as { message?: { customType: string; content: string; details?: unknown } } | undefined;
+		// Like Pi: an edited tool list wins over the live set, applied in the live set's order.
+		const selected = systemPromptOptions.selectedTools;
+		if (selected.length !== before.length || selected.some((n, i) => n !== before[i])) {
+			const requested = new Set(selected);
+			const next = [...new Set([...active.filter((n) => requested.has(n)), ...selected])];
+			if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
+		}
 		if (result?.message)
 			branch.push({
 				type: "custom_message",

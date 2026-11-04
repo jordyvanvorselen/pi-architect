@@ -46,5 +46,18 @@ export function applyTools(pi: ExtensionAPI, state: ArchitectState, record: (tur
 export const toolKey = (s: ArchitectState) =>
 	s.mode === "architect" ? `architect:${phaseTools(s.architecture).join(",")}` : "build";
 
+/**
+ * Make the run declare exactly `active`, also when an extension that loads later turns a tool back on in its
+ * own `before_agent_start`, like pi-web-access does with `web_enable`. Pi runs those handlers in load order
+ * and then uses the live tool set, unless a handler edited `selectedTools`: an edited list wins over later
+ * `setActiveTools` calls. Pi tells an edit by comparing the list in order, and applies it in its own order, so
+ * a list that would look unchanged goes in reversed.
+ */
+export function pinSelectedTools(options: { selectedTools: string[] }, active: readonly string[]): void {
+	const seen = options.selectedTools;
+	const same = active.length === seen.length && active.every((n, i) => n === seen[i]);
+	options.selectedTools = same ? [...active].reverse() : [...active];
+}
+
 /** The active tools that entering architect mode turns off. */
 export const turnedOffByArchitect = (pi: ExtensionAPI) => pi.getActiveTools().filter((n) => !allowedInArchitect(n));

@@ -14,6 +14,7 @@ import {
 } from "./prompt.ts";
 import { blockReason } from "./readonly/index.ts";
 import type { ArchitectSession } from "./session.ts";
+import { pinSelectedTools } from "./tools-activation.ts";
 
 export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): void {
 	pi.on("session_start", async (event, ctx) => {
@@ -21,6 +22,12 @@ export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): 
 		await session.syncProgress(ctx);
 		if (event.reason === "startup" && pi.getFlag(FLAG) === true && session.state.mode !== "architect")
 			await session.setMode("architect", ctx);
+	});
+
+	// Pi fires this after every session_start handler, also after a reload: a tool another extension turned on
+	// at session start goes off again.
+	pi.on("resources_discover", async () => {
+		if (session.state.mode === "architect") session.applyTools();
 	});
 
 	pi.on("session_tree", async (_event, ctx) => {
@@ -62,7 +69,11 @@ export function registerLifecycle(pi: ExtensionAPI, session: ArchitectSession): 
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		session.ctx = ctx;
-		if (session.state.mode === "architect") session.applyTools();
+		if (session.state.mode === "architect") {
+			session.applyTools();
+			// Handlers of extensions that load later run after this one and may turn tools back on.
+			pinSelectedTools(event.systemPromptOptions, pi.getActiveTools());
+		}
 		const { state, progress } = session;
 		const sections = event.systemPromptOptions.sections;
 		const section =
