@@ -30,7 +30,7 @@ export function nextPlanPath(dir: string, slug: string): string | undefined {
  * between two attempts is safe too. Creates `dir` when needed. Returns the absolute path.
  *
  * This is the only file pi-architect writes. It goes through Node directly, not through the edit or write
- * tools, so the read-only guard of architect mode stays as strict as before.
+ * tools, so the agent never has to write in architect mode.
  */
 export async function writePlan(dir: string, slug: string, content: string): Promise<string> {
 	await mkdir(dir, { recursive: true });

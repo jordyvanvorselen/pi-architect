@@ -11,7 +11,7 @@ import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state
 import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
 import type { ArchitectState, Mode } from "./state/types.ts";
-import { applyTools, toolKey, turnedOffByArchitect } from "./tools-activation.ts";
+import { applyTools, toolKey } from "./tools-activation.ts";
 import type { Finalized } from "./tools/advance.ts";
 import { BoardSession, openBoard } from "./ui/board/index.ts";
 import { Widgets } from "./widgets.ts";
@@ -62,7 +62,7 @@ export class ArchitectSession {
 
 	/** Make the active tools fit the mode and the phase. */
 	applyTools(): void {
-		applyTools(this.pi, this.state, (turnedOff) => this.append({ type: "tools", turnedOff }));
+		applyTools(this.pi, this.state);
 	}
 
 	/** Redraw the status, the widget and the board. */
@@ -149,10 +149,9 @@ export class ArchitectSession {
 		}
 	}
 
-	/** The event that switches mode. Entering architect mode remembers which tools it turns off. */
+	/** The event that switches mode. */
 	modeEvent(mode: Mode): EventInput {
-		if (mode === "build") return { type: "mode", mode, at: this.now() };
-		return { type: "mode", mode, at: this.now(), turnedOff: turnedOffByArchitect(this.pi) };
+		return { type: "mode", mode, at: this.now() };
 	}
 
 	/** Switch mode after a confirmation where work would be left unapproved. Returns false when the user declined. */

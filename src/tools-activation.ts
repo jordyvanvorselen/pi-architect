@@ -1,63 +1,35 @@
 // Which tools are active in each mode and phase.
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { allowedInArchitect } from "./readonly/index.ts";
 import type { ArchitectState } from "./state/types.ts";
 import { phaseTools } from "./tools/common.ts";
 
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
 
-/** What build mode brings back when nothing recorded what architect mode turned off. */
+/** What versions before 0.3 turned off in architect mode, when nothing recorded it. */
 const WRITE_TOOLS = ["edit", "write"];
 
 /**
- * Make the active tools fit the mode and the phase. Architect mode turns off every tool the read-only
- * allowlist does not allow, so their schemas are not sent, and the architect tools of the current phase on
- * (see `phaseTools`). Build mode turns the architect tools off and exactly the tools architect mode turned
- * off back on. A reload keeps the current tools and turns on every extension tool, and a resume or /tree
- * restores the tool set from the transcript, so this works from the state alone and never from what it
- * turned off in memory.
+ * Make the active tools fit the mode and the phase. Architect mode turns the architect tools of the current
+ * phase on (see `phaseTools`) and leaves every other tool alone: the prompt tells the agent not to change
+ * anything. Build mode turns the architect tools off. A reload turns on every extension tool, and a resume or
+ * /tree restores the tool set from the transcript, so this works from the state alone.
  *
- * `record` remembers tools that turned on since architect mode started, e.g. MCP tools that registered late.
+ * Versions before 0.3 turned off every tool outside a read-only allowlist and recorded them in `turnedOff`.
+ * Both modes turn those tools back on, so a session from such a version gets them back.
  */
-export function applyTools(pi: ExtensionAPI, state: ArchitectState, record: (turnedOff: string[]) => void): void {
+export function applyTools(pi: ExtensionAPI, state: ArchitectState): void {
 	const active = pi.getActiveTools();
 	const all = new Set(pi.getAllTools().map((t) => t.name));
-	let next: string[];
-	if (state.mode === "architect") {
-		const wanted = phaseTools(state.architecture).filter((n) => all.has(n));
-		const kept = active.filter((n) => allowedInArchitect(n) && (!isArchitectTool(n) || wanted.includes(n)));
-		next = [...new Set([...kept, ...wanted])];
-		// Tools that turned on since, e.g. MCP tools that registered late: off too, and remembered.
-		const known = new Set(state.turnedOff ?? []);
-		const late = active.filter((n) => !allowedInArchitect(n) && !known.has(n));
-		if (late.length) record(late);
-	} else {
-		// No record of what architect mode turned off, e.g. after /tree to before architect mode, while the
-		// architect tools are still on: the set comes from architect mode, so the write tools come back.
-		const leftover = state.turnedOff === undefined && active.some(isArchitectTool);
-		const back = (state.turnedOff ?? (leftover ? WRITE_TOOLS : [])).filter((n) => all.has(n));
-		next = [...new Set([...active.filter((n) => !isArchitectTool(n)), ...back])];
-	}
+	// No record of what an older architect mode turned off, e.g. after /tree to before it, while the architect
+	// tools are still on: the set comes from that architect mode, so the write tools come back.
+	const leftover = state.mode === "build" && state.turnedOff === undefined && active.some(isArchitectTool);
+	const back = (state.turnedOff ?? (leftover ? WRITE_TOOLS : [])).filter((n) => all.has(n) && !isArchitectTool(n));
+	const wanted = state.mode === "architect" ? phaseTools(state.architecture).filter((n) => all.has(n)) : [];
+	const next = [...new Set([...active.filter((n) => !isArchitectTool(n) || wanted.includes(n)), ...back, ...wanted])];
 	if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
 }
 
 /** What the active tools depend on. */
 export const toolKey = (s: ArchitectState) =>
 	s.mode === "architect" ? `architect:${phaseTools(s.architecture).join(",")}` : "build";
-
-/**
- * Make the run declare exactly `active`, also when an extension that loads later turns a tool back on in its
- * own `before_agent_start`, like pi-web-access does with `web_enable`. Pi runs those handlers in load order
- * and then uses the live tool set, unless a handler edited `selectedTools`: an edited list wins over later
- * `setActiveTools` calls. Pi tells an edit by comparing the list in order, and applies it in its own order, so
- * a list that would look unchanged goes in reversed.
- */
-export function pinSelectedTools(options: { selectedTools: string[] }, active: readonly string[]): void {
-	const seen = options.selectedTools;
-	const same = active.length === seen.length && active.every((n, i) => n === seen[i]);
-	options.selectedTools = same ? [...active].reverse() : [...active];
-}
-
-/** The active tools that entering architect mode turns off. */
-export const turnedOffByArchitect = (pi: ExtensionAPI) => pi.getActiveTools().filter((n) => !allowedInArchitect(n));

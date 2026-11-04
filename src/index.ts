@@ -15,7 +15,7 @@ import { registerEntryRenderer } from "./transcript.ts";
 import { createDecisionCard } from "./ui/decision/index.ts";
 import { createPhaseReview } from "./ui/review/index.ts";
 
-export { KICKOFF_MESSAGE, SHORTCUT, SUBCOMMAND_NAMES } from "./commands.ts";
+export { SHORTCUT, SUBCOMMAND_NAMES } from "./commands.ts";
 export { FLAG, flagHelp, HELP_COLUMN, PLAN_DIR_FLAG } from "./flags.ts";
 export { ENTRY_TYPE } from "./state/events.ts";
 export { isArchitectTool } from "./tools-activation.ts";

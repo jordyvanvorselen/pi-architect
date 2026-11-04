@@ -4,12 +4,12 @@ import { describe, it } from "node:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, FLAG, SHORTCUT, WIDGET_KEY } from "../src/index.ts";
 import { KEEP } from "../src/confirm.ts";
-import { allowedInArchitect } from "../src/readonly/index.ts";
 import { MODE_MESSAGE, SECTION } from "../src/prompt.ts";
 import { REVIEW_MESSAGE } from "../src/reopen.ts";
+import { event, type EventInput } from "../src/state/events.ts";
 import { rebuild } from "../src/state/reducer.ts";
 import { STATUS_KEY } from "../src/ui/status.ts";
-import { harness } from "./harness.ts";
+import { harness, type BranchEntry } from "./harness.ts";
 import { assertComponentFits, FakeUi, KEYS, plainTheme, type } from "./helpers.ts";
 
 const events = (h: ReturnType<typeof harness>) => h.entries.map((e) => e.data.type);
@@ -23,6 +23,8 @@ const SLICE = {
 	steps: ["Add dedupKey() to src/key.ts"],
 	verify: ["npm test"],
 };
+
+const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
 
 async function architecting(ui = new FakeUi()) {
 	const h = harness({ ui });
@@ -100,11 +102,11 @@ describe("modes", () => {
 		assert.deepEqual(h.entries, []);
 	});
 
-	it("architect mode turns edit and write off, the architect tools on and shows the stepper", async () => {
+	it("architect mode keeps edit and write on, turns the architect tools on and shows the stepper", async () => {
 		const h = await architecting();
 		assert.deepEqual(events(h), ["mode"]);
 		const active = h.active();
-		assert.ok(!active.includes("edit") && !active.includes("write"));
+		assert.ok(active.includes("edit") && active.includes("write"));
 		assert.ok(active.includes("architect_update") && active.includes("architect_advance"));
 		assert.ok(active.includes("read") && active.includes("bash"));
 		assert.equal(h.ui!.statuses.get(STATUS_KEY), "◆ architect · Frame");
@@ -112,7 +114,7 @@ describe("modes", () => {
 		assertComponentFits(h.ui!.widgets.get(WIDGET_KEY) as never);
 	});
 
-	it("build mode brings back exactly the tools architect mode turned off", async () => {
+	it("build mode keeps the tools the user had and turns the architect tools off", async () => {
 		const h = harness({ ui: new FakeUi(), builtins: ["read", "bash", "write"] });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect");
@@ -279,40 +281,33 @@ describe("persistence", () => {
 		const ui = new FakeUi();
 		const second = harness({ ui, branch: [...first.branch] });
 		await second.fire("session_start", { reason: "reload" });
-		assert.ok(!second.active().includes("edit"));
 		assert.ok(second.active().includes("architect_update"));
 		assert.match(ui.widgetLines(WIDGET_KEY)![0]!, /◆ ARCHITECT {2}Dedupe {2}● Frame/);
 	});
 
-	it("brings edit and write back in build mode after a reload kept the architect tool set", async () => {
-		const first = await architecting();
-		await first.call("architect_update", { feature: "Dedupe" });
-		// A reload keeps the tools of architect mode: the architect set, without edit and write.
-		const restored = first.active();
-		assert.ok(!restored.includes("edit") && !restored.includes("write"));
-		const second = harness({ ui: new FakeUi({ confirm: [true] }), branch: [...first.branch], activeTools: restored });
-		await second.fire("session_start", { reason: "reload" });
-		await second.command("architect", "build");
-		assert.ok(second.active().includes("edit") && second.active().includes("write"));
-		assert.ok(!second.active().some((n) => n.startsWith("architect_")));
+	it("leaves every tool on in architect mode, also ones it does not know, and only swaps the architect tools", async () => {
+		const builtins = ["read", "bash", "edit", "write", "codemode", "mcp__jira__getJiraIssue", "web_search"];
+		const h = harness({ ui: new FakeUi(), builtins });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		assert.deepEqual(
+			h.active().filter((n) => !n.startsWith("architect_")),
+			builtins,
+			"the prompt asks the agent not to change anything, so no tool is turned off",
+		);
+		assert.ok(h.active().includes("architect_update"));
+		await h.command("architect", "build");
+		assert.deepEqual(h.active(), builtins);
 	});
 
-	it("brings edit and write back when /tree lands in build mode with the architect tool set", async () => {
-		const first = await architecting();
-		const restored = first.active();
-		await first.command("architect", "build");
-		const second = harness({ ui: new FakeUi(), branch: [...first.branch], activeTools: restored });
-		await second.fire("session_tree", {});
-		assert.deepEqual(second.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
-	});
-
-	it("brings edit and write back after /tree to before architect mode left the architect tool set on", async () => {
-		const first = await architecting();
-		const restored = first.active();
-		// The branch before architect mode: nothing records what architect mode turned off.
-		const h = harness({ ui: new FakeUi(), branch: [], activeTools: restored });
-		await h.fire("session_tree", {});
-		assert.deepEqual(h.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
+	it("blocks no tool call in architect mode", async () => {
+		const h = await architecting();
+		for (const [tool, input] of [
+			["edit", { path: "x" }],
+			["bash", { command: "rm -rf x" }],
+			["mcp__jira__editJiraIssue", {}],
+		] as const)
+			assert.equal(await h.toolCall(tool, input), undefined, tool);
 	});
 
 	it("turns the architect tools of other phases off again after a reload turned every extension tool on", async () => {
@@ -324,94 +319,33 @@ describe("persistence", () => {
 			second.active().filter((n) => n.startsWith("architect_")),
 			["architect_update", "architect_advance"],
 		);
-		assert.ok(!second.active().includes("edit"));
 	});
 
-	it("keeps a write tool off in build mode when the user had it off before architect mode", async () => {
-		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash", "edit"] });
-		await h.fire("session_start", { reason: "startup" });
-		await h.command("architect");
-		assert.deepEqual(h.entries[0]!.data.turnedOff, ["edit"]);
-		const restored = h.active();
-		const after = harness({ ui: new FakeUi(), branch: [...h.branch], activeTools: restored });
-		await after.fire("session_start", { reason: "resume" });
-		await after.command("architect", "build");
-		assert.ok(after.active().includes("edit"));
-		assert.ok(!after.active().includes("write"));
-	});
-
-	it("turns off every tool the read-only allowlist does not allow, and back on exactly those in build mode", async () => {
-		const builtins = ["read", "bash", "edit", "write", "grep", "find", "ls", "powershell", "mcp__web", "mcp__db"];
-		// mcp__db is registered but was off before architect mode, so build mode leaves it off.
-		const before = builtins.filter((n) => n !== "mcp__db");
-		const h = harness({ ui: new FakeUi(), builtins, activeTools: before });
-		await h.fire("session_start", { reason: "startup" });
-		await h.command("architect");
-		const outside = h.active().filter((n) => !allowedInArchitect(n));
-		assert.deepEqual(outside, []);
+	it("turns tools back on that a version before 0.3 turned off, in both modes", async () => {
+		const builtins = ["read", "bash", "edit", "write", "codemode"];
+		const older = [entry({ type: "mode", mode: "architect", at: 1, turnedOff: ["edit", "write", "codemode"] })];
+		const h = harness({ ui: new FakeUi(), builtins, branch: older, activeTools: ["read", "bash"] });
+		await h.fire("session_start", { reason: "resume" });
+		await h.startRun();
 		assert.deepEqual(
-			h
-				.active()
-				.filter((n) => !n.startsWith("architect_"))
-				.sort(),
-			["bash", "find", "grep", "ls", "read"],
+			h.active().filter((n) => !n.startsWith("architect_")),
+			["read", "bash", "edit", "write", "codemode"],
 		);
-		// The architect tool set is still on after a reload; build mode still knows what to bring back.
-		const after = harness({ ui: new FakeUi(), builtins, branch: [...h.branch], activeTools: h.active() });
-		await after.fire("session_start", { reason: "reload" });
-		await after.command("architect", "build");
-		assert.deepEqual(after.active().sort(), [...before].sort());
+		const build = harness({
+			ui: new FakeUi(),
+			builtins,
+			branch: [...older, entry({ type: "mode", mode: "build", at: 2 })],
+			activeTools: ["read", "bash"],
+		});
+		await build.fire("session_start", { reason: "resume" });
+		assert.deepEqual(build.active().sort(), ["bash", "codemode", "edit", "read", "write"]);
 	});
 
-	it("turns off a tool that turned on during architect mode before the next request, and restores it later", async () => {
-		const builtins = ["read", "bash", "edit", "write", "mcp__late"];
-		const h = harness({ ui: new FakeUi(), builtins, activeTools: ["read", "bash", "edit", "write"] });
-		await h.fire("session_start", { reason: "startup" });
-		await h.command("architect");
-		// An MCP server connected late, and Pi turned its tool on.
-		h.pi.setActiveTools([...h.active(), "mcp__late"]);
-		await h.startRun();
-		assert.ok(!h.active().includes("mcp__late"));
-		assert.deepEqual(h.entries.at(-1)!.data, { v: 1, type: "tools", turnedOff: ["mcp__late"] });
-		await h.command("architect", "build");
-		assert.deepEqual(h.active().sort(), ["bash", "edit", "mcp__late", "read", "write"]);
-	});
-
-	it("turns off a tool that turned on in the middle of a run before the next turn's request", async () => {
-		const builtins = ["read", "bash", "edit", "write", "mcp__late"];
-		const h = harness({ ui: new FakeUi(), builtins, activeTools: ["read", "bash", "edit", "write"] });
-		await h.fire("session_start", { reason: "startup" });
-		await h.command("architect");
-		await h.startRun();
-		h.pi.setActiveTools([...h.active(), "mcp__late"]);
-		await h.fire("turn_start", { turnIndex: 1, timestamp: 0 });
-		assert.ok(!h.active().includes("mcp__late"));
-		assert.deepEqual(h.entries.at(-1)!.data, { v: 1, type: "tools", turnedOff: ["mcp__late"] });
-	});
-
-	it("keeps a tool off that a later extension turns back on at session start and before each run", async () => {
-		const builtins = ["read", "bash", "edit", "write", "web_enable"];
-		const h = harness({ ui: new FakeUi(), builtins });
-		// Like pi-web-access: it loads after pi-architect and turns web_enable on whenever it is off.
-		const turnOn = () => {
-			if (!h.pi.getActiveTools().includes("web_enable")) h.pi.setActiveTools([...h.pi.getActiveTools(), "web_enable"]);
-		};
-		h.pi.on("session_start", turnOn);
-		h.pi.on("before_agent_start", turnOn);
-		await h.fire("session_start", { reason: "startup" });
-		await h.command("architect");
-		assert.ok(!h.active().includes("web_enable"));
-		// A reload: the extension turns it on in its session_start, and Pi fires resources_discover after that.
-		await h.fire("session_start", { reason: "reload" });
-		assert.ok(h.active().includes("web_enable"));
-		await h.fire("resources_discover", { cwd: h.cwd, reason: "reload" });
-		assert.ok(!h.active().includes("web_enable"));
-		for (let run = 0; run < 2; run++) {
-			await h.startRun();
-			assert.ok(!h.active().includes("web_enable"), `run ${run + 1}`);
-		}
-		await h.command("architect", "build");
-		assert.ok(h.active().includes("web_enable"));
+	it("brings edit and write back after /tree to before an older architect mode left its tool set on", async () => {
+		// The branch before architect mode: nothing records what the older architect mode turned off.
+		const h = harness({ ui: new FakeUi(), branch: [], activeTools: ["read", "bash", "architect_update"] });
+		await h.fire("session_tree", {});
+		assert.deepEqual(h.active().sort(), ["bash", "edit", "read", "write"]);
 	});
 
 	it("leaves the tools alone in a session that was never in architect mode", async () => {
@@ -455,18 +389,13 @@ describe("persistence", () => {
 });
 
 describe("/architect", () => {
-	it("names the feature, enters architect mode and starts the agent on Frame", async () => {
+	it("names the feature and enters architect mode, but waits for the user's first message", async () => {
 		const h = harness({ ui: new FakeUi() });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect", "Dedupe panel events");
 		assert.deepEqual(events(h), ["begin", "mode"]);
 		assert.equal(h.entries[0]!.data.slug, "dedupe-panel-events");
-		assert.equal(h.sent.length, 1);
-		assert.equal(
-			h.sent[0]!.message.content,
-			"Architect this feature: Dedupe panel events. Start with the Frame phase.",
-		);
-		assert.deepEqual(h.sent[0]!.options, { triggerTurn: true, deliverAs: "followUp" });
+		assert.equal(h.sent.length, 0, "the name alone is not enough to frame the feature, so no turn starts");
 	});
 
 	it("without a feature it only enters architect mode", async () => {
@@ -528,21 +457,6 @@ describe("/architect", () => {
 		assert.equal(rebuild(h.branch).architecture!.feature, "");
 		assert.equal(ui.prompts[1]!.title, 'Discard the architecture?\nThis discards the architecture for "Dedupe".');
 		assert.deepEqual(ui.prompts[1]!.detail, [KEEP, "Yes, discard it"]);
-	});
-});
-
-describe("read-only mode", () => {
-	it("blocks writes only in architect mode", async () => {
-		const h = harness({ ui: new FakeUi() });
-		await h.fire("session_start", { reason: "startup" });
-		assert.equal(await h.toolCall("bash", { command: "rm -rf x" }), undefined);
-		await h.command("architect");
-		const blocked = await h.toolCall("bash", { command: "ls && rm -rf x" });
-		assert.equal(blocked?.block, true);
-		assert.match(blocked!.reason, /rm is not a read-only command/);
-		assert.equal((await h.toolCall("edit", { path: "x" }))?.block, true);
-		assert.equal(await h.toolCall("bash", { command: "git status" }), undefined);
-		assert.equal(await h.toolCall("read", { path: "x" }), undefined);
 	});
 });
 
@@ -649,7 +563,6 @@ describe("tools per phase", () => {
 		await h.call("architect_update", { modules: [{ path: "src", role: "touched" }] });
 		await h.call("architect_advance", {});
 		assert.ok(architectTools(h).includes("architect_decide"));
-		assert.ok(!h.active().includes("edit"));
 	});
 
 	it("does not touch the tools for content that leaves the phase as it is", async () => {
@@ -890,7 +803,7 @@ describe("transcript entries", () => {
 			return component?.render(120).map((l) => stripTerminalSequences(l).trimEnd());
 		};
 		assert.deepEqual(render({ v: 1, type: "mode", mode: "architect", at: 1 }), [
-			"◆ architect mode  read-only · the agent walks through the phases, you approve each one",
+			"◆ architect mode  design only · the agent walks through the phases, you approve each one",
 		]);
 		assert.deepEqual(render({ v: 1, type: "mode", mode: "build", at: 1 }), ["▸ build mode  all tools are back"]);
 		assert.deepEqual(render({ v: 1, type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }), [

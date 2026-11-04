@@ -47,14 +47,11 @@ export interface ModeEvent extends Base {
 	type: "mode";
 	mode: Mode;
 	at: number;
-	/**
-	 * Entering architect mode: the tools it turned off, so build mode turns exactly those back on.
-	 * The extension starts fresh after a reload, a resume or /tree, so the event has to remember this.
-	 */
+	/** Entering architect mode in a version before 0.3: the tools it turned off. Newer versions turn none off. */
 	turnedOff?: string[];
 }
 
-/** Architect mode turned more tools off, e.g. ones that registered after it started. */
+/** Architect mode in a version before 0.3 turned more tools off. Newer versions do not write this event. */
 export interface ToolsEvent extends Base {
 	type: "tools";
 	turnedOff: string[];

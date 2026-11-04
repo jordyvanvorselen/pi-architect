@@ -12,7 +12,6 @@ import { isPristine } from "./state/reducer.ts";
 import type { AdvanceDeps } from "./tools/advance.ts";
 import { BOARD_SHORTCUT } from "./ui/board/index.ts";
 
-export const KICKOFF_MESSAGE = "architect-kickoff";
 /** Toggles the mode. Pi does not bind it by default. */
 export const SHORTCUT = "ctrl+alt+a";
 /** The first words `/architect` reserves. Anything else names a feature. */
@@ -58,7 +57,7 @@ export function registerCommands(pi: ExtensionAPI, session: ArchitectSession, de
 		session.append({ type: "reset", at: now() });
 	}
 
-	/** Architect mode on a named feature. A new name replaces the architecture, after a confirmation. */
+	/** Architect mode on a named feature, waiting for the user's first message. A new name replaces the architecture, after a confirmation. */
 	async function begin(feature: string, ctx: ExtensionCommandContext): Promise<void> {
 		const arch = session.state.architecture;
 		const fresh = !arch || isPristine(arch);
@@ -75,23 +74,11 @@ export function registerCommands(pi: ExtensionAPI, session: ArchitectSession, de
 			);
 			if (!ok) return;
 		}
-		let begun = fresh;
 		if (arch && !fresh && !arch.feature)
 			session.append({ type: "update", phase: arch.phase, feature: { name: feature, slug: slugify(feature) } });
-		else if (!arch || arch.feature !== feature) {
+		else if (!arch || arch.feature !== feature)
 			session.append({ type: "begin", feature, slug: slugify(feature), at: now() });
-			begun = true;
-		}
 		if (session.state.mode !== "architect") session.append(session.modeEvent("architect"));
-		if (begun)
-			pi.sendMessage(
-				{
-					customType: KICKOFF_MESSAGE,
-					content: `Architect this feature: ${feature}. Start with the Frame phase.`,
-					display: false,
-				},
-				{ triggerTurn: true, deliverAs: "followUp" },
-			);
 	}
 
 	/** `/architect plan [open|write|build]`: the plan path and progress, and what to do with the plan. */

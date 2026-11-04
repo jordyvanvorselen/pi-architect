@@ -143,20 +143,6 @@ describe("writing the plan on Blueprint approval", () => {
 		assert.match(h.ui!.notifications.at(-1)!.message, /^Writing the plan file failed: /);
 	});
 
-	it("keeps architect mode read-only after the plan is written, also for the plan file", async () => {
-		const h = await approved();
-		await h.command("architect", "plan write");
-		const file = join(h.cwd, planPath);
-		for (const [tool, input] of [
-			["write", { path: file, content: "x" }],
-			["edit", { path: file, edits: [] }],
-			["write", { path: join(h.cwd, "other.md"), content: "x" }],
-			["bash", { command: `echo x > ${file}` }],
-		] as const)
-			assert.ok((await h.toolCall(tool, input))?.block, `${tool} is blocked`);
-		assert.equal(await h.toolCall("read", { path: file }), undefined);
-	});
-
 	it("shows the plan in the transcript", async () => {
 		const h = harness();
 		const line = (
