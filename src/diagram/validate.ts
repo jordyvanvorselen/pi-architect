@@ -130,7 +130,7 @@ export function validateDiagram(input: unknown, options: ValidateOptions = {}): 
 					...(typeof raw.caption === "string" && raw.caption.trim() ? { caption: raw.caption.trim() } : {}),
 				}
 			: undefined;
-	return verdict(findings, diagram, repairs);
+	return verdict(findings, diagram, repairs, repairs.length ? lines : undefined);
 }
 
 /** Tidy a drawing without moving anything relative to anything else. */
@@ -145,7 +145,12 @@ export function normalizeBody(body: string): string {
 	return lines.map((l) => (Number.isFinite(indent) ? l.slice(indent) : l)).join("\n");
 }
 
-function verdict(all: DiagramFinding[], diagram: Diagram | undefined, repairs: DiagramRepair[]): DiagramCheck {
+function verdict(
+	all: DiagramFinding[],
+	diagram: Diagram | undefined,
+	repairs: DiagramRepair[],
+	repaired?: readonly string[],
+): DiagramCheck {
 	const sorted = [...all].sort(
 		(a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1) || a.line - b.line || a.col - b.col,
 	);
@@ -154,15 +159,28 @@ function verdict(all: DiagramFinding[], diagram: Diagram | undefined, repairs: D
 	const findings = sorted.slice(0, MAX_FINDINGS);
 	const ok = errors === 0 && diagram !== undefined;
 	const counts = [count(errors, "error"), count(warnings, "warning")].filter(Boolean).join(", ");
-	const head = ok
-		? warnings
-			? `Diagram accepted with ${counts}.`
-			: "Diagram accepted."
-		: `Diagram rejected: ${counts}. Fix the errors and send the whole diagram again.`;
 	const rows = findings.map(
 		(f) => `- ${f.line ? `line ${f.line}${f.col ? ` col ${f.col}` : ""} ` : ""}${f.severity}: ${f.message}`,
 	);
 	if (sorted.length > findings.length) rows.push(`- …and ${sorted.length - findings.length} more.`);
+	let summary: string[];
+	if (ok)
+		summary = [
+			warnings ? `Diagram accepted with ${counts}.` : "Diagram accepted.",
+			...rows,
+			...repairLines(repairs, true),
+		];
+	else if (repairs.length) {
+		// What the checker fixed comes first and is labelled as its own work, so the model never reads its own
+		// repair as a mistake to fix; then what is still wrong, in the repaired drawing the model gets back.
+		summary = [
+			`Diagram rejected: ${counts} left after repairing ${count(repairs.length, "alignment slip")}. Fix the errors and send the whole diagram again.`,
+			...repairLines(repairs, false),
+			"Still wrong (lines and columns of the repaired drawing below):",
+			...rows,
+			...(repaired ? ["The repaired drawing, to fix and send again:", "```", ...repaired, "```"] : []),
+		];
+	} else summary = [`Diagram rejected: ${counts}. Fix the errors and send the whole diagram again.`, ...rows];
 	return {
 		ok,
 		diagram: ok || diagram ? diagram : undefined,
@@ -170,7 +188,7 @@ function verdict(all: DiagramFinding[], diagram: Diagram | undefined, repairs: D
 		errors,
 		warnings,
 		repairs,
-		summary: [head, ...rows, ...repairLines(repairs, ok)].join("\n"),
+		summary: summary.join("\n"),
 	};
 }
 
@@ -179,7 +197,7 @@ export function repairLines(repairs: readonly DiagramRepair[], accepted: boolean
 	if (!repairs.length) return [];
 	const head = accepted
 		? `Repaired ${count(repairs.length, "alignment slip")} before showing it. Keep these when you revise it:`
-		: `Repaired ${count(repairs.length, "alignment slip")} already; the findings above are for the repaired drawing. Make these changes too:`;
+		: "Already repaired by the checker, nothing to do for these:";
 	return [head, ...repairs.map((r) => `- line ${r.line} col ${r.col}: ${r.message}.`)];
 }
 

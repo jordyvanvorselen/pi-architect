@@ -132,7 +132,9 @@ export function planDiagram(
 		const examples = kinds
 			.filter((k) => (options.rejections?.count(k) ?? 0) >= EXAMPLE_AFTER)
 			.map((k) => `- ${PASSING[k]}`);
-		const again = examples.length ? ["The same problem came back. What passes:", ...examples] : [];
+		const again = examples.length
+			? ["You made this kind of error in your last attempt too. What passes:", ...examples]
+			: [];
 		return {
 			event: undefined,
 			text: [check.summary, ...(old ? [`Keep id "${old.id}" to replace it.`] : []), ...again].join("\n"),

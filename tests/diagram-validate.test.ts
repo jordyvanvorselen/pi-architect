@@ -117,7 +117,28 @@ describe("validateDiagram", () => {
 		});
 		assert.equal(check.ok, false);
 		assert.match(check.summary, /line 5 col 8 error: box side/);
-		assert.match(check.summary, /Repaired 1 alignment slip already; the findings above are for the repaired drawing/);
+		const lines = check.summary.split("\n");
+		assert.equal(
+			lines[0],
+			"Diagram rejected: 1 error left after repairing 1 alignment slip. Fix the errors and send the whole diagram again.",
+		);
+		assert.deepEqual(lines.slice(1, 4), [
+			"Already repaired by the checker, nothing to do for these:",
+			"- line 3 col 10: moved ╯ from col 10 to col 9, in line with the corner on line 1.",
+			"Still wrong (lines and columns of the repaired drawing below):",
+		]);
+		assert.match(lines[4]!, /^- line 5 col 8 error: box side/);
+		assert.deepEqual(lines.slice(5), [
+			"The repaired drawing, to fix and send again:",
+			"```",
+			"╭───────╮",
+			"│ Panel │",
+			"╰───────╯",
+			"╭──────╮",
+			"│ Orders │",
+			"╰──────╯",
+			"```",
+		]);
 	});
 
 	it("suggests the real status markers", () => {
