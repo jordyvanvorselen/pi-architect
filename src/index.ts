@@ -614,9 +614,14 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		if (reason) return { block: true, reason };
 	});
 
+	// Tools can register after architect mode started, e.g. MCP tools, also in the middle of a run: turn them
+	// off before each request.
+	pi.on("turn_start", async () => {
+		if (state.mode === "architect") applyTools();
+	});
+
 	pi.on("before_agent_start", async (event, ctx) => {
 		ctxRef = ctx;
-		// Tools can register after architect mode started, e.g. MCP tools: turn them off before the request.
 		if (state.mode === "architect") applyTools();
 		const sections = event.systemPromptOptions.sections;
 		const section =
