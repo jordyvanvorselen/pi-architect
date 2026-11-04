@@ -3,7 +3,14 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
-import { type DiagramFinding, diagramMaxWidth, DiagramSchema, validateDiagram } from "../diagram/index.ts";
+import {
+	type DiagramFinding,
+	diagramMaxWidth,
+	type DiagramRepair,
+	DiagramSchema,
+	repairLines,
+	validateDiagram,
+} from "../diagram/index.ts";
 import type { DiagramEvent } from "../state/events.ts";
 import { PHASE_LABEL, phaseIndex, type Phase } from "../state/phases.ts";
 import { missing, nextId } from "../state/queries.ts";
@@ -63,6 +70,8 @@ export type DiagramDetails =
 			lines: number;
 			cols: number;
 			warnings: DiagramFinding[];
+			/** Slips repaired before it was saved. */
+			repairs: DiagramRepair[];
 			missing: string[];
 	  }
 	| { outcome: "rejected"; phase: Phase; errors: number; warnings: number; findings: DiagramFinding[] };
@@ -123,11 +132,15 @@ export function planDiagram(arch: Architecture, input: DiagramInput, options: { 
 	const cols = Math.max(0, ...bodyLines.map((l) => visibleWidth(l)));
 	const gaps = missing({ ...arch, diagrams: [...arch.diagrams.filter((d) => d.id !== diagram.id), diagram] });
 	const next = readiness(phase, gaps);
-	const warnings = check.warnings ? ` ${check.summary.split("\n").slice(1).join("\n")}` : "";
+	const warned = check.findings.filter((f) => f.severity === "warning");
+	const warnings = warned.length
+		? ` Warnings, fix them if you revise it: ${warned.map((f) => `- line ${f.line} col ${f.col} warning: ${f.message}`).join("\n")}`
+		: "";
+	const repaired = check.repairs.length ? ` ${repairLines(check.repairs, true).join("\n")}` : "";
 	const verb = old ? `Replaced diagram ${diagram.id}` : `Saved diagram ${diagram.id}`;
 	return {
 		event: { type: "diagram", diagram },
-		text: `${verb} "${diagram.title}" (${bodyLines.length} lines, ${cols} cols). The user sees it on screen.${warnings ? ` Warnings, fix them if you revise it:${warnings}` : ""} ${next}`,
+		text: `${verb} "${diagram.title}" (${bodyLines.length} lines, ${cols} cols). The user sees it on screen.${repaired}${warnings} ${next}`,
 		details: {
 			outcome: "saved",
 			phase,
@@ -135,7 +148,8 @@ export function planDiagram(arch: Architecture, input: DiagramInput, options: { 
 			replaced: Boolean(old),
 			lines: bodyLines.length,
 			cols,
-			warnings: check.findings.filter((f) => f.severity === "warning"),
+			warnings: warned,
+			repairs: check.repairs,
 			missing: gaps,
 		},
 	};

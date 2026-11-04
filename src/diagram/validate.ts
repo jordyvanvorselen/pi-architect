@@ -2,10 +2,12 @@
 // for the model to redraw it; warnings are shown but accepted.
 import { type DiagramFinding, lintBody } from "./lint.ts";
 import { MARKER_ALIASES } from "./markers.ts";
+import { type DiagramRepair, repairBody } from "./repair.ts";
 import { clean, width } from "./text.ts";
 import type { Diagram } from "./types.ts";
 
 export type { DiagramFinding, Severity } from "./lint.ts";
+export type { DiagramRepair } from "./repair.ts";
 
 /** Widest body the guide asks for. Wider diagrams scroll or get cut in narrow terminals. */
 export const DEFAULT_MAX_WIDTH = 100;
@@ -27,6 +29,11 @@ export interface DiagramCheck {
 	findings: DiagramFinding[];
 	errors: number;
 	warnings: number;
+	/**
+	 * Slips the checker repaired before linting, like a corner one column off. The diagram and the findings
+	 * are those of the repaired drawing. `line`/`col` are where the repair was, in the body as sent.
+	 */
+	repairs: DiagramRepair[];
 	/** Model-readable verdict with every finding, for the tool result. */
 	summary: string;
 }
@@ -43,21 +50,25 @@ export function validateDiagram(input: unknown, options: ValidateOptions = {}): 
 
 	if (typeof input !== "object" || input === null || Array.isArray(input)) {
 		whole("error", "A diagram must be an object: { title, body, caption? }.");
-		return verdict(findings, undefined);
+		return verdict(findings, undefined, []);
 	}
 	const raw = input as Record<string, unknown>;
 	if (typeof raw.title !== "string" || !clean(raw.title)) whole("error", "title: give the diagram a short title.");
 	if (raw.caption !== undefined && typeof raw.caption !== "string") whole("error", "caption: must be text.");
 	if (typeof raw.body !== "string") {
 		whole("error", "body: must be the drawing as text, lines separated by \\n.");
-		return verdict(findings, undefined);
+		return verdict(findings, undefined, []);
 	}
 	const body = raw.body.replace(/\r\n?/g, "\n");
 	if (!body.trim()) whole("error", "body: the drawing is empty.");
 	else if (!body.includes("\n") && body.includes("\\n")) {
 		whole("error", "body: has \\n as text but no line breaks. Send real newlines (the JSON escape \\n, not \\\\n).");
 	}
-	const lines = body.split("\n").map((l) => l.trimEnd());
+	const sent = body.split("\n").map((l) => l.trimEnd());
+	// Unambiguous one-column slips are repaired first, so the model does not redraw a diagram for them.
+	// eslint-disable-next-line no-control-regex -- a drawing with control characters is not repaired
+	const repairable = body.trim() !== "" && !sent.some((l) => /[\t\u0000-\u0008\u000b-\u001f\u007f-\u009f]/.test(l));
+	const { lines, repairs } = repairable ? repairBody(sent) : { lines: sent, repairs: [] };
 
 	const tabs = lines.flatMap((l, i) => (l.includes("\t") ? [i] : []));
 	if (tabs.length) {
@@ -115,11 +126,11 @@ export function validateDiagram(input: unknown, options: ValidateOptions = {}): 
 		typeof raw.title === "string"
 			? {
 					title: clean(raw.title),
-					body: normalizeBody(body),
+					body: normalizeBody(repairs.length ? lines.join("\n") : body),
 					...(typeof raw.caption === "string" && raw.caption.trim() ? { caption: raw.caption.trim() } : {}),
 				}
 			: undefined;
-	return verdict(findings, diagram);
+	return verdict(findings, diagram, repairs);
 }
 
 /** Tidy a drawing without moving anything relative to anything else. */
@@ -134,7 +145,7 @@ export function normalizeBody(body: string): string {
 	return lines.map((l) => (Number.isFinite(indent) ? l.slice(indent) : l)).join("\n");
 }
 
-function verdict(all: DiagramFinding[], diagram: Diagram | undefined): DiagramCheck {
+function verdict(all: DiagramFinding[], diagram: Diagram | undefined, repairs: DiagramRepair[]): DiagramCheck {
 	const sorted = [...all].sort(
 		(a, b) => (a.severity === b.severity ? 0 : a.severity === "error" ? -1 : 1) || a.line - b.line || a.col - b.col,
 	);
@@ -158,8 +169,18 @@ function verdict(all: DiagramFinding[], diagram: Diagram | undefined): DiagramCh
 		findings,
 		errors,
 		warnings,
-		summary: [head, ...rows].join("\n"),
+		repairs,
+		summary: [head, ...rows, ...repairLines(repairs, ok)].join("\n"),
 	};
+}
+
+/** What the checker repaired, for the model: so it draws the same way when it revises the diagram. */
+export function repairLines(repairs: readonly DiagramRepair[], accepted: boolean): string[] {
+	if (!repairs.length) return [];
+	const head = accepted
+		? `Repaired ${count(repairs.length, "alignment slip")} before showing it. Keep these when you revise it:`
+		: `Repaired ${count(repairs.length, "alignment slip")} already; the findings above are for the repaired drawing. Make these changes too:`;
+	return [head, ...repairs.map((r) => `- line ${r.line} col ${r.col}: ${r.message}.`)];
 }
 
 function count(n: number, word: string): string {

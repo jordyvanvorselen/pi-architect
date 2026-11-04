@@ -1,7 +1,8 @@
 // Diagrams the model draws itself as Unicode text.
 //
 // - `DIAGRAM_GUIDE` tells the model how to draw them.
-// - `validateDiagram` lints a drawing for alignment mistakes; errors reject it with findings the model can fix.
+// - `validateDiagram` repairs unambiguous one-column slips, then lints a drawing for alignment mistakes; errors
+//   reject it with findings the model can fix.
 // - `renderDiagram` shows it as a themed card that always fits the width; `DiagramView` scrolls wide ones.
 export { DIAGRAM_GUIDE, diagramGuide, diagramMaxWidth, GUIDE_EXAMPLE } from "./guide.ts";
 export { type DiagramFinding, type Severity } from "./lint.ts";
@@ -11,8 +12,10 @@ export { type Diagram, type DiagramColor, DiagramSchema, type DiagramTheme } fro
 export {
 	DEFAULT_MAX_WIDTH,
 	type DiagramCheck,
+	type DiagramRepair,
 	MAX_FINDINGS,
 	normalizeBody,
+	repairLines,
 	type ValidateOptions,
 	validateDiagram,
 } from "./validate.ts";
