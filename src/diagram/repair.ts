@@ -1,5 +1,6 @@
 // Safe repairs for the slips a model makes most when it draws boxes: a corner or a side one or two columns off,
-// a corner of the other style, and a line that meets a box edge without a junction. Each repair is tried on a copy and kept only when the linter
+// a corner of the other style, a line that meets a box edge without a junction, and padding that drifts row by
+// row (see reflow.ts). Each repair is tried on a copy and kept only when the linter
 // then finds strictly less and nothing new, so a repair can never make a drawing worse. Anything with more than
 // one reading is left for the model to fix.
 import {
@@ -24,6 +25,7 @@ import {
 	type Box,
 } from "./grid.ts";
 import { type DiagramFinding, lintBody, matchingCorner, oddCorner } from "./lint.ts";
+import { reflowBody } from "./reflow.ts";
 
 /** One repair, 1-based like the linter's findings, with what was done. */
 export interface DiagramRepair {
@@ -37,10 +39,12 @@ export interface RepairResult {
 	repairs: DiagramRepair[];
 }
 
-/** A change to try: cells to set, and what to tell the model when it is kept. */
+/** A change to try: cells to set (or whole new lines), and what to tell the model when it is kept. */
 interface Candidate {
 	cells: { r: number; c: number; ch: string }[];
-	repair: DiagramRepair;
+	lines?: string[];
+	/** A reflow reports one repair per box it realigned. */
+	repair: DiagramRepair | DiagramRepair[];
 }
 
 /** Most columns a corner or a side may be off and still be moved: more is a different drawing, not a slip. */
@@ -71,7 +75,7 @@ export function repairBody(lines: readonly string[]): RepairResult {
 			if (!better(findings, after)) continue;
 			current = next;
 			findings = after;
-			repairs.push(candidate.repair);
+			repairs.push(...[candidate.repair].flat());
 			kept = true;
 			break;
 		}
@@ -93,6 +97,7 @@ function better(before: DiagramFinding[], after: DiagramFinding[]): boolean {
 }
 
 function apply(grid: Grid, candidate: Candidate): string[] {
+	if (candidate.lines) return candidate.lines;
 	const rows = grid.rows.map((row) => [...row]);
 	for (const { r, c, ch } of candidate.cells) {
 		const row = rows[r]!;
@@ -107,6 +112,38 @@ function* candidates(grid: Grid): Generator<Candidate> {
 	yield* sideRepairs(grid);
 	yield* cornerStyleRepairs(grid);
 	yield* junctionRepairs(grid);
+	yield* reflowRepairs(grid);
+}
+
+/** Drift: a box side that wanders further off its column row by row. Resize the padding before it on each row. */
+function* reflowRepairs(grid: Grid): Generator<Candidate> {
+	const result = reflowBody(grid.rows.map((row) => row.join("")));
+	if (!result) return;
+	const repairs = result.edits.map((e): DiagramRepair => {
+		const rows = [...e.rows].sort((a, b) => a - b);
+		const span = (from: number, to: number) => (from === to ? `line ${from + 1}` : `lines ${from + 1}–${to + 1}`);
+		const min = Math.min(...e.offsets);
+		const max = Math.max(...e.offsets);
+		const cols = `${min === max ? min : `${min}–${max}`} col${max > 1 ? "s" : ""}`;
+		const box = e.name ? `box "${e.name}"` : `the box opened at line ${e.top + 1} col ${e.left + 1}`;
+		const sides = [...e.sides].sort().join(" and ");
+		const parts = [
+			...(rows.length
+				? [`the ${sides} side${e.sides.size > 1 ? "s" : ""} of ${box} on ${span(rows[0]!, rows.at(-1)!)}`]
+				: []),
+			...(e.bottom !== undefined
+				? [`${rows.length ? "its" : `the`} bottom edge${rows.length ? "" : ` of ${box}`} on line ${e.bottom + 1}`]
+				: []),
+		];
+		const why = rows.length ? `${e.padding ? "padding" : "spacing"} was off by ${cols}` : `it was off by ${cols}`;
+		return {
+			line: (rows[0] ?? e.bottom ?? e.top) + 1,
+			col: e.left + 1,
+			message: `realigned ${parts.join(" and ")} (${why})`,
+		};
+	});
+	repairs.sort((a, b) => a.line - b.line || a.col - b.col);
+	yield { cells: [], lines: result.lines, repair: repairs };
 }
 
 /** Whether a neighbour of (r, c) other than the ones in `except` reaches into it. */

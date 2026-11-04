@@ -1,0 +1,6 @@
+╭─────────────╮       ╭─────────────╮
+│ Client      │       │ Server      │
+│ browser app  │       │ REST api    │
+│ renders       │       │ validates   │
+│ list          │       │ todos       │
+╰───────────────╯       ╰─────────────╯

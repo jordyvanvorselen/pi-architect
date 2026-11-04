@@ -1,0 +1,5 @@
+╭────────────╮   HTTP    ╭────────────╮
+│ Client     │  request  │ Server     │
+│ todo app   ├──────────▶│ express    │
+│ list view  │◀──────────┤ router     │
+╰────────────╯   JSON    ╰────────────╯
