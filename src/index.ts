@@ -28,7 +28,7 @@ import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
 import { registerSliceTool } from "./tools/slice.ts";
 import { registerUpdateTool } from "./tools/update.ts";
-import { BOARD_HINT, BOARD_SHORTCUT, openBoard, type BoardScreen } from "./ui/board/index.ts";
+import { BOARD_HINT, BOARD_SHORTCUT, BoardSession, openBoard } from "./ui/board/index.ts";
 import { createDecisionCard } from "./ui/decision/index.ts";
 import { choiceEntry, SpanView, verdictEntry } from "./ui/entries.ts";
 import type { Paint } from "./ui/paint.ts";
@@ -96,8 +96,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	/** Slices of the plan file as last read. The file is the source of truth, so this is only a cache. */
 	let progress: SliceProgress[] | undefined;
 
-	/** The open board, so it redraws when the architecture changes. */
-	let board: BoardScreen | undefined;
+	/** The board, so it redraws when the architecture changes and opens once. */
+	const boards = new BoardSession();
 
 	/**
 	 * Make the active tools fit the mode and the phase. Architect mode turns the write tools off and the
@@ -141,7 +141,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		const ctx = ctxRef;
 		if (!ctx?.hasUI) return;
 		const theme = ctx.ui.theme as Paint;
-		board?.update();
+		boards.update();
 		ctx.ui.setStatus(STATUS_KEY, modeStatus(state, theme));
 		// The board shortcut only works in Pi's terminal UI.
 		const hint = ctx.mode === "tui" ? BOARD_HINT : undefined;
@@ -286,25 +286,26 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	 */
 	async function showBoard(ctx: ExtensionContext, { readOnly = false } = {}): Promise<void> {
 		ctxRef = ctx;
-		if (board) return;
-		await syncProgress(ctx);
-		const plan = state.plan;
-		const planText = plan ? await readPlan(planFile(ctx.cwd, plan.path)) : undefined;
-		const target = planTarget(ctx);
-		const session = ctx.sessionManager.getSessionId();
-		await openBoard(ctx, {
-			data: () => ({
-				mode: state.mode,
-				...(state.architecture ? { arch: state.architecture } : {}),
-				...(state.plan ? { plan: state.plan } : {}),
-				...(planText !== undefined && state.plan === plan ? { planText } : {}),
-				...(target ? { planTarget: target } : {}),
-				...(progress ? { progress } : {}),
-				session,
-			}),
-			send: (text, options) => pi.sendUserMessage(text, options),
-			readOnly,
-			onOpen: (open) => (board = open),
+		await boards.show(async (hooks) => {
+			await syncProgress(ctx);
+			const plan = state.plan;
+			const planText = plan ? await readPlan(planFile(ctx.cwd, plan.path)) : undefined;
+			const target = planTarget(ctx);
+			const session = ctx.sessionManager.getSessionId();
+			return openBoard(ctx, {
+				data: () => ({
+					mode: state.mode,
+					...(state.architecture ? { arch: state.architecture } : {}),
+					...(state.plan ? { plan: state.plan } : {}),
+					...(planText !== undefined && state.plan === plan ? { planText } : {}),
+					...(target ? { planTarget: target } : {}),
+					...(progress ? { progress } : {}),
+					session,
+				}),
+				send: (text, options) => pi.sendUserMessage(text, options),
+				readOnly,
+				...hooks,
+			});
 		});
 	}
 

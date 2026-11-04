@@ -8,6 +8,7 @@ import { boardOverlay } from "./screen.ts";
 
 export { boardMessage, type BoardComment } from "./comments.ts";
 export { BoardScreen, type BoardOptions } from "./component.ts";
+export { BoardSession } from "./session.ts";
 export { TABS, type BoardData, type BoardTab } from "./model.ts";
 
 /** Opens the board. Pi does not bind it by default. */
