@@ -25,7 +25,7 @@ Every Pi session has a mode: **architect** or **build**. The user sets it. A new
 - `/architect build` switches to build mode.
 - `ctrl+alt+a` toggles the mode. Pi does not bind this key.
 - `pi --architect` starts in architect mode.
-- `/architect <feature>` switches to architect mode, names the feature and starts the agent on Frame.
+- `/architect <feature>` switches to architect mode, names the feature and waits for the user's first message.
 - `/architect reset` discards the architecture in this session, after a confirmation.
 
 The mode is stored in the session, so it survives reload and resume. The footer always shows it: `◆ architect · Decide` or `▸ build`.

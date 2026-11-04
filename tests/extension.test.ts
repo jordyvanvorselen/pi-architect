@@ -455,18 +455,13 @@ describe("persistence", () => {
 });
 
 describe("/architect", () => {
-	it("names the feature, enters architect mode and starts the agent on Frame", async () => {
+	it("names the feature and enters architect mode, but waits for the user's first message", async () => {
 		const h = harness({ ui: new FakeUi() });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect", "Dedupe panel events");
 		assert.deepEqual(events(h), ["begin", "mode"]);
 		assert.equal(h.entries[0]!.data.slug, "dedupe-panel-events");
-		assert.equal(h.sent.length, 1);
-		assert.equal(
-			h.sent[0]!.message.content,
-			"Architect this feature: Dedupe panel events. Start with the Frame phase.",
-		);
-		assert.deepEqual(h.sent[0]!.options, { triggerTurn: true, deliverAs: "followUp" });
+		assert.equal(h.sent.length, 0, "the name alone is not enough to frame the feature, so no turn starts");
 	});
 
 	it("without a feature it only enters architect mode", async () => {

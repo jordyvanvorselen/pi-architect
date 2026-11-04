@@ -40,7 +40,7 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | Command                          | What it does                                                      |
 | -------------------------------- | ----------------------------------------------------------------- |
 | `/architect`                     | Switch to architect mode. In architect mode it offers the actions |
-| `/architect <feature>`           | Architect mode, on a new feature                                  |
+| `/architect <feature>`           | Architect mode, on a new feature. Waits for your first message    |
 | `/architect build`               | Switch to build mode                                              |
 | `/architect board`, `ctrl+alt+b` | See the whole design on one screen                                |
 | `/architect review`              | Review the current phase, e.g. again after closing its review     |

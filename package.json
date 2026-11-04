@@ -1,6 +1,6 @@
 {
   "name": "@jordyvanvorselen/pi-architect",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Architect a feature with Pi before you build it. The agent walks through visual phases, you approve each one, and the result is a plan file another agent can build from.",
   "type": "module",
   "license": "MIT",
