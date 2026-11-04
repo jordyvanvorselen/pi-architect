@@ -16,6 +16,8 @@ import { renderReview, reviewGeometry, type ReviewMode } from "./screen.ts";
  * Calls `done` once, with the verdict or undefined.
  */
 export class ReviewScreen implements Component, Focusable {
+	/** PgUp and PgDn scroll the screen, not the transcript behind it, in Pi's fullscreen mode. */
+	readonly capturesViewportInput = true;
 	private readonly tui: TUI;
 	private readonly paint: Paint;
 	private readonly request: ReviewRequest;
