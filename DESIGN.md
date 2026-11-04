@@ -127,7 +127,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Phase     | The screen shows                                                      |
 | --------- | --------------------------------------------------------------------- |
 | Frame     | The brief: goal, constraints beside out of scope, done-when           |
-| Explore   | The module map as a tree, with touched, new and context markers       |
+| Explore   | Diagrams and risks first. Below them the module map and the findings  |
 | Decide    | Each decision with the choice and comment. Rejected options are dim   |
 | Design    | The diagrams, drawn by the diagram renderer                           |
 | Slice     | The slices in build order, with arrows, files, steps and verify       |

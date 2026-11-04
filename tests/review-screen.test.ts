@@ -237,6 +237,11 @@ describe("phase review screens", () => {
 		assert.match(t, /DIAGRAMS/);
 		assert.match(t, /Today/);
 		assert.doesNotMatch(t, /Event flow/);
+		const at = (heading: string) => t.indexOf(heading);
+		assert.ok(
+			at("DIAGRAMS") < at("RISKS") && at("RISKS") < at("MODULES") && at("MODULES") < at("FINDINGS"),
+			"the big picture (diagrams, risks) comes before the details (modules, findings)",
+		);
 		const narrow = text("explore", 40);
 		assert.match(narrow, /│ {2}│ {2}events arrive here/, "a long note wraps under its module");
 		assert.match(text("explore", 80, newArchitecture(1)), /no modules yet/);
@@ -442,8 +447,6 @@ describe("phase review screens", () => {
 			() => {},
 		);
 		const t = c.render(100).join("\n");
-		assert.match(t, /<warning>● <\/warning><text><b>ingest\/<\/b><\/text>/);
-		assert.match(t, /<success>\+ <\/success><success><b>dedupe\/<\/b><\/success>/);
 		const tall = new ReviewScreen(
 			{ requestRender() {}, terminal: { rows: 200 } } as never,
 			tagTheme,
@@ -451,10 +454,13 @@ describe("phase review screens", () => {
 			REVIEW_BODIES.explore,
 			() => {},
 		);
-		assert.match(tall.render(100).join("\n"), /<dim>○ <\/dim><muted>api<\/muted>/);
-		assert.doesNotMatch(t, /<borderMuted><\/borderMuted>/, "no empty styles");
+		const all = tall.render(100).join("\n");
+		assert.match(all, /<warning>● <\/warning><text><b>ingest\/<\/b><\/text>/);
+		assert.match(all, /<success>\+ <\/success><success><b>dedupe\/<\/b><\/success>/);
+		assert.match(all, /<dim>○ <\/dim><muted>api<\/muted>/);
+		assert.doesNotMatch(all, /<borderMuted><\/borderMuted>/, "no empty styles");
 		assert.match(t, /<accent>┃<\/accent>/);
-		assert.match(t, /<accent><b>MODULES<\/b><\/accent>/);
+		assert.match(all, /<accent><b>MODULES<\/b><\/accent>/);
 	});
 });
 

@@ -49,11 +49,21 @@ describe("review lines", () => {
 			"Done when: no duplicates",
 			"⚠ high ordering across nodes",
 		]);
-		assert.deepEqual(reviewLines(arch, "explore").slice(0, 3), [
-			"touched src/ingest – dedupe here",
-			"context src/api",
-			"• events arrive twice",
-		]);
+		const explored = {
+			...arch,
+			diagrams: [...arch.diagrams, { id: "g2", phase: "explore" as const, title: "Today", body: "a" }],
+		};
+		assert.deepEqual(
+			reviewLines(explored, "explore"),
+			[
+				"▣ Today",
+				"⚠ high ordering across nodes",
+				"touched src/ingest – dedupe here",
+				"context src/api",
+				"• events arrive twice",
+			],
+			"Explore puts the big picture (diagrams, risks) above the modules and findings",
+		);
 		assert.deepEqual(reviewLines(arch, "decide").slice(0, 2), [
 			"Where? → B In backend (only alarms)",
 			"How long? → open",

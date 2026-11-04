@@ -29,6 +29,7 @@ const list = (items: readonly string[]) => (items.length ? items.join("; ") : "�
 /** The phase content as short text lines, for the simple review dialog. */
 export function reviewLines(arch: Architecture, phase: Phase): string[] {
 	const lines: string[] = [];
+	const riskLines = arch.risks.map((r) => `⚠ ${r.severity} ${r.text}`);
 	switch (phase) {
 		case "frame":
 			lines.push(
@@ -40,6 +41,9 @@ export function reviewLines(arch: Architecture, phase: Phase): string[] {
 			);
 			break;
 		case "explore":
+			// Big picture first: diagrams and risks, then the details.
+			for (const d of arch.diagrams) if (d.phase === "explore") lines.push(`▣ ${d.title}`);
+			lines.push(...riskLines.splice(0));
 			for (const m of arch.modules) lines.push(`${m.role.padEnd(7)} ${m.path}${m.note ? ` – ${m.note}` : ""}`);
 			for (const f of arch.findings) lines.push(`• ${f.text}`);
 			break;
@@ -75,7 +79,7 @@ export function reviewLines(arch: Architecture, phase: Phase): string[] {
 			break;
 		}
 	}
-	for (const r of arch.risks) lines.push(`⚠ ${r.severity} ${r.text}`);
+	lines.push(...riskLines);
 	return lines;
 }
 

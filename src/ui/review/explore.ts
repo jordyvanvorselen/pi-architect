@@ -99,17 +99,9 @@ export const legend: Line = [
 	sp("context", "dim"),
 ];
 
-/** Explore: the module map, the key findings and any diagrams of the existing code. */
+/** Explore: the big picture first (diagrams of the existing code, risks), then the module map and the findings. */
 export const exploreBody: ReviewBody = (arch, width, paint) => {
-	const lines = section("Modules", moduleMap(arch.modules, width), width, legend);
-	const findings = arch.findings.flatMap((f) => {
-		const tag = `${f.id} `.padEnd(4);
-		return wrap(f.text, Math.max(1, width - tag.length)).map((l, i) => [
-			sp(i ? " ".repeat(tag.length) : tag, "dim"),
-			sp(l, "text"),
-		]);
-	});
-	if (findings.length) lines.push(...section("Findings", findings, width));
+	const lines: Line[] = [];
 	const diagrams = arch.diagrams.filter((d) => d.phase === "explore");
 	if (diagrams.length)
 		lines.push(
@@ -120,5 +112,14 @@ export const exploreBody: ReviewBody = (arch, width, paint) => {
 			),
 		);
 	lines.push(...risks(arch, width));
+	lines.push(...section("Modules", moduleMap(arch.modules, width), width, legend));
+	const findings = arch.findings.flatMap((f) => {
+		const tag = `${f.id} `.padEnd(4);
+		return wrap(f.text, Math.max(1, width - tag.length)).map((l, i) => [
+			sp(i ? " ".repeat(tag.length) : tag, "dim"),
+			sp(l, "text"),
+		]);
+	});
+	if (findings.length) lines.push(...section("Findings", findings, width));
 	return trim(lines);
 };
