@@ -33,7 +33,8 @@ const slice = (id: string, dependsOn: string[] = []): Slice => ({
 });
 
 function at(partial: Partial<Architecture> = {}): Architecture {
-	return { ...newArchitecture(1, "Dedupe", "dedupe"), phase: "slice", ...partial };
+	const modules: Architecture["modules"] = [{ path: "src", role: "touched", files: ["a.ts"] }];
+	return { ...newArchitecture(1, "Dedupe", "dedupe"), phase: "slice", modules, ...partial };
 }
 
 /** The error message, for assertions. */
@@ -231,6 +232,21 @@ describe("planSlices", () => {
 			plan.text,
 			"Saved 1 slice. Build order: 1. s1. Slice is ready: call architect_advance when the user should review it.",
 		);
+	});
+
+	it("points out files outside the module map and same-file slices that may run at once, without rejecting", () => {
+		const plan = planSlices(at(), {
+			slices: [
+				good("s1", [], { files: ["src/store.ts", "tests/store.test.ts"] }),
+				good("s2", [], { files: ["src/store.ts"] }),
+			],
+		});
+		assert.match(
+			plan.text,
+			/Check: s1 and s2 can be built at the same time but both change src\/store\.ts: make one depend on the other\. Not in the module map, so the plan lists it as new: tests\/store\.test\.ts\. If a file exists, record its module with architect_update\(\{ modules \}\)\. Slice is ready/,
+		);
+		const fine = planSlices(at(), { slices: [good("s1"), good("s2", ["s1"], { files: ["src/s1.ts"] })] });
+		assert.doesNotMatch(fine.text, /Check:/);
 	});
 
 	it("says what changed compared with the earlier list", () => {

@@ -47,3 +47,30 @@ export function orderLine(order: readonly Ordered[]): string {
 	for (const o of order) (groups[o.step - 1] ??= []).push(o.number);
 	return groups.map((g) => g.join(", ")).join(" → ");
 }
+
+/** A file that slices in the same build step all change. */
+export interface SharedFile {
+	file: string;
+	/** Build numbers of the slices, ascending. */
+	numbers: number[];
+	ids: string[];
+}
+
+/**
+ * Files that two or more slices of one build step change. Those slices may be built at the same time,
+ * and would then edit the same file at once.
+ */
+export function sharedFiles(order: readonly Ordered[]): SharedFile[] {
+	const shared: SharedFile[] = [];
+	const steps = new Map<number, Ordered[]>();
+	for (const o of order) steps.set(o.step, [...(steps.get(o.step) ?? []), o]);
+	for (const group of steps.values()) {
+		if (group.length < 2) continue;
+		const byFile = new Map<string, Ordered[]>();
+		for (const o of group) for (const f of new Set(o.slice.files)) byFile.set(f, [...(byFile.get(f) ?? []), o]);
+		for (const [file, slices] of byFile)
+			if (slices.length > 1)
+				shared.push({ file, numbers: slices.map((o) => o.number), ids: slices.map((o) => o.slice.id) });
+	}
+	return shared;
+}

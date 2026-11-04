@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { format } from "prettier";
-import { buildBlueprint } from "../src/plan/blueprint.ts";
+import { ADDED_MODULE_NOTE, buildBlueprint, unmappedFiles } from "../src/plan/blueprint.ts";
 import { buildSection, kickoff } from "../src/plan/handoff.ts";
 import { isDone, parsePlanProgress, sliceStates } from "../src/plan/progress.ts";
 import { renderPlan } from "../src/plan/render.ts";
 import { displayPath, nextPlanPath, planFile, readPlan, writePlan } from "../src/plan/write.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
-import type { Architecture } from "../src/state/types.ts";
+import type { Architecture, Slice } from "../src/state/types.ts";
 import { fullArchitecture } from "./fixtures/plan/architecture.ts";
 
 const SNAPSHOT = new URL("./fixtures/plan/dedupe-panel-events.md", import.meta.url);
@@ -193,12 +193,67 @@ describe("an option the user wrote", () => {
 });
 
 describe("buildBlueprint", () => {
+	const sliceOf = (id: string, files: string[], dependsOn: string[] = []): Slice => ({
+		id,
+		title: `Slice ${id}`,
+		goal: "g",
+		dependsOn,
+		files,
+		steps: ["Change the file"],
+		verify: ["npm test"],
+	});
+
+	it("adds the files the slices touch outside the module map as new modules, one per directory", () => {
+		const arch: Architecture = {
+			...newArchitecture(1, "Todo", "todo"),
+			modules: [
+				{ path: "src/store", role: "touched", files: [] },
+				{ path: "src/ui", role: "touched", files: ["list.tsx"] },
+			],
+			slices: [
+				sliceOf("s1", ["src/store/todos.ts", "./tests/store.test.ts"]),
+				sliceOf("s2", ["src/ui/list.tsx", "tests/list.test.ts", "README.md"]),
+			],
+		};
+		assert.deepEqual(unmappedFiles(arch), ["tests/store.test.ts", "tests/list.test.ts", "README.md"]);
+		const added = buildBlueprint(arch).modules.filter((m) => m.note === ADDED_MODULE_NOTE);
+		assert.deepEqual(
+			added.map((m) => [m.path, m.role, m.files]),
+			[
+				["tests", "new", ["tests/store.test.ts", "tests/list.test.ts"]],
+				[".", "new", ["README.md"]],
+			],
+		);
+		const md = renderPlan(arch);
+		assert.match(md, /- `tests` \(new\): Not in the module map from Explore\.[^\n]*\n {2}- `tests\/store\.test\.ts`/);
+	});
+
+	it("notes slices that may be built at the same time but change the same file", () => {
+		const arch: Architecture = {
+			...newArchitecture(1, "Todo", "todo"),
+			modules: [{ path: "src", role: "touched", files: [] }],
+			slices: [
+				sliceOf("s1", ["src/store.ts"]),
+				sliceOf("s2", ["src/store.ts", "src/a.ts"]),
+				sliceOf("s3", ["src/store.ts"], ["s1"]),
+			],
+		};
+		assert.deepEqual(buildBlueprint(arch).sharedFiles, [{ file: "src/store.ts", numbers: [1, 2], ids: ["s1", "s2"] }]);
+		assert.match(
+			renderPlan(arch),
+			/Build order: 1 and 2 in any order, then 3\.\n\n- Slices 1 and 2 both change `src\/store\.ts`\. Build them one after the other, not at the same time\./,
+		);
+		const ordered = { ...arch, slices: [arch.slices[0]!, sliceOf("s2", ["src/store.ts"], ["s1"])] };
+		assert.deepEqual(buildBlueprint(ordered).sharedFiles, []);
+		assert.doesNotMatch(renderPlan(ordered), /both change/);
+	});
+
 	it("arranges the architecture as the plan", () => {
 		const bp = buildBlueprint(fullArchitecture());
 		assert.equal(bp.status, "approved");
 		assert.deepEqual(
 			bp.modules.map((m) => m.path),
-			["src/ingest", "migrations", "src/ingest/dedup", "src/api/alarms"],
+			["src/ingest", "migrations", "src/ingest/dedup", "tests/ingest", "src/api/alarms"],
 		);
 		assert.deepEqual(
 			bp.risks.map((r) => r.severity),
@@ -229,7 +284,7 @@ describe("buildBlueprint", () => {
 			{ option: { ...forever, rating: { effort, risk }, byUser: false }, recommended: true },
 		]);
 		assert.deepEqual(bp.counts, {
-			modules: 4,
+			modules: 5,
 			findings: 3,
 			decisions: 2,
 			open: 0,

@@ -32,6 +32,15 @@ describe("phase guidance", () => {
 		}
 	});
 
+	it("asks for tests in each slice, every touched file, and an order for slices on the same file", () => {
+		const slice = phaseGuidance("slice").join(" ");
+		assert.match(slice, /tests in the same slice, not in a last testing slice/);
+		assert.match(
+			slice,
+			/List every file a slice touches\. Slices that change the same file must depend on each other\./,
+		);
+	});
+
 	it("asks the agent to name an unnamed feature in Frame", () => {
 		assert.match(phaseGuidance("frame", at({ feature: "" }))[0]!, /architect_update\(\{ feature \}\)/);
 		assert.doesNotMatch(phaseGuidance("frame", at()).join(" "), /no name yet/);

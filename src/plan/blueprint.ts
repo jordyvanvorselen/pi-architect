@@ -11,7 +11,7 @@ import type {
 	Risk,
 	Severity,
 } from "../state/types.ts";
-import { buildOrder, type Ordered } from "./order.ts";
+import { buildOrder, sharedFiles, type Ordered, type SharedFile } from "./order.ts";
 
 /**
  * An option as the plan shows it. An option the user wrote has no `rating`: the agent never rated it,
@@ -73,6 +73,8 @@ export interface Blueprint {
 	risks: Risk[];
 	/** Slices in build order, numbered. */
 	slices: Ordered[];
+	/** Files that slices of one build step both change, so they should not be built at the same time. */
+	sharedFiles: SharedFile[];
 	counts: BlueprintCounts;
 }
 
@@ -107,9 +109,42 @@ function decision(d: Architecture["decisions"][number]): BlueprintDecision {
 	};
 }
 
+const normal = (path: string) => path.trim().replace(/^\.\//, "").replace(/\/+$/, "");
+
+/** Whether a module of the map covers `file`: the module is the file, contains it or lists it. */
+function covers(m: ModuleRef, file: string): boolean {
+	const path = normal(m.path);
+	const f = normal(file);
+	return path === f || f.startsWith(`${path}/`) || m.files.some((x) => normal(x) === f || `${path}/${normal(x)}` === f);
+}
+
+/** Note on a module the plan adds because a slice touches a file the module map does not have. */
+export const ADDED_MODULE_NOTE = "Not in the module map from Explore. The slices create or change these files.";
+
+/** Files the slices touch that no module covers, in slice order. */
+export function unmappedFiles(arch: Pick<Architecture, "modules" | "slices">): string[] {
+	const files = [...new Set(arch.slices.flatMap((s) => s.files.map(normal)))];
+	return files.filter((f) => f && !arch.modules.some((m) => covers(m, f)));
+}
+
+/**
+ * The module map with every file the slices touch. Files that no module covers are added as new modules,
+ * one per directory and with a note, so the builder's context lists every file the plan changes.
+ */
+function withSliceFiles(arch: Architecture): ModuleRef[] {
+	const byDir = new Map<string, string[]>();
+	for (const file of unmappedFiles(arch)) {
+		const dir = file.includes("/") ? file.slice(0, file.lastIndexOf("/")) : ".";
+		byDir.set(dir, [...(byDir.get(dir) ?? []), file]);
+	}
+	const added = [...byDir].map(([path, files]): ModuleRef => ({ path, role: "new", files, note: ADDED_MODULE_NOTE }));
+	return [...arch.modules, ...added];
+}
+
 /** The architecture arranged as the plan. Pure and deterministic. */
 export function buildBlueprint(arch: Architecture): Blueprint {
 	const slices = buildOrder(arch.slices);
+	const modules = withSliceFiles(arch);
 	const c = counts(arch);
 	return {
 		feature: arch.feature,
@@ -117,15 +152,16 @@ export function buildBlueprint(arch: Architecture): Blueprint {
 		status: arch.approvedAt !== undefined ? "approved" : "draft",
 		...(arch.approvedAt !== undefined ? { approvedAt: arch.approvedAt } : {}),
 		brief: arch.brief,
-		modules: stable(arch.modules, (m) => ROLE_ORDER[m.role]),
+		modules: stable(modules, (m) => ROLE_ORDER[m.role]),
 		findings: arch.findings,
 		currentShape: arch.diagrams.filter((d) => d.phase === "explore"),
 		decisions: arch.decisions.map(decision),
 		design: arch.diagrams.filter((d) => d.phase !== "explore"),
 		risks: stable(arch.risks, (r) => SEVERITY_ORDER[r.severity]),
 		slices,
+		sharedFiles: sharedFiles(slices),
 		counts: {
-			modules: arch.modules.length,
+			modules: modules.length,
 			findings: arch.findings.length,
 			decisions: arch.decisions.length,
 			open: c.open,

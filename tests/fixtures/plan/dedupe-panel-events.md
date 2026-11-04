@@ -53,6 +53,9 @@ Panels send the same alarm event up to five times when the network flaps. Store 
 - `migrations` (to change): Plain SQL files, applied in name order.
 - `src/ingest/dedup` (new): Builds the dedup key from the panel id, the sequence number and the UTC date.
   - `src/ingest/dedup/key.ts`
+- `tests/ingest` (new): Not in the module map from Explore. The slices create or change these files.
+  - `tests/ingest/key.test.ts`
+  - `tests/ingest/processor.test.ts`
 - `src/api/alarms` (read only, do not change): Reads `panel_events`.
   - `src/api/alarms/list.ts`
 
