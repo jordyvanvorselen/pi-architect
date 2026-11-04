@@ -554,7 +554,7 @@ describe("the review screen entry point", () => {
 	});
 
 	it("takes other bodies, e.g. the Blueprint screen", async () => {
-		const review = createPhaseReview({ blueprint: () => [[sp("THE BLUEPRINT")]] });
+		const review = createPhaseReview({ blueprint: () => [[sp("THE BLUEPRINT")]] }, { graceMs: 0 });
 		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter]);
 		assert.equal(await review({ arch: ARCH, phase: "blueprint" }, { mode: "tui", ui } as never), undefined);
 		assert.ok(ui.customs[0]!.frames[0]!.some((l) => l.includes("THE BLUEPRINT")));
@@ -652,9 +652,14 @@ describe("review screen grace period", () => {
 		assert.deepEqual(s.answers, [{ verdict: "changes", comment: "b" }]);
 	});
 
-	it("still closes with esc and ↵ during the grace period", () => {
-		const s = screen("frame", ARCH, 200, undefined, { now: () => 0 });
+	it("asks to close with esc during the grace period, and ignores ↵ there until it ends", () => {
+		let t = 0;
+		const s = screen("frame", ARCH, 200, undefined, { now: () => t });
 		s.keys(KEYS.escape, KEYS.enter);
+		assert.deepEqual(s.answers, [], "a stray ↵ does not close");
+		assert.equal(s.component.state.mode, "closing");
+		t = 300;
+		s.keys(KEYS.enter);
 		assert.deepEqual(s.answers, [undefined]);
 	});
 

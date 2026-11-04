@@ -110,8 +110,10 @@ export class DecisionCard implements Component, Focusable {
 			return;
 		}
 		if (this.closing) {
-			if (matchesKey(data, Key.enter)) this.done(undefined);
-			else if (matchesKey(data, Key.escape)) {
+			// A stray ↵ must not close the card either: closing stops the agent.
+			if (matchesKey(data, Key.enter)) {
+				if (!this.grace.active) this.done(undefined);
+			} else if (matchesKey(data, Key.escape)) {
 				this.closing = false;
 				this.changed();
 			}

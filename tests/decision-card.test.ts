@@ -377,9 +377,14 @@ describe("decision card grace period", () => {
 		assert.deepEqual(c.answers, [{ kind: "ask", question: "b" }]);
 	});
 
-	it("still closes with esc and ↵ during the grace period", () => {
-		const c = card({}, 200, { now: () => 0 });
+	it("asks to close with esc during the grace period, and ignores ↵ there until it ends", () => {
+		let t = 0;
+		const c = card({}, 200, { now: () => t });
 		c.keys(KEYS.escape, KEYS.enter);
+		assert.deepEqual(c.answers, [], "a stray ↵ does not close");
+		assert.match(c.lines(100).join("\n"), /Close without choosing\?/);
+		t = 300;
+		c.keys(KEYS.enter);
 		assert.deepEqual(c.answers, [undefined]);
 	});
 
