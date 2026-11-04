@@ -356,6 +356,18 @@ describe("persistence", () => {
 		assert.deepEqual(h.active().sort(), ["bash", "edit", "mcp__late", "read", "write"]);
 	});
 
+	it("turns off a tool that turned on in the middle of a run before the next turn's request", async () => {
+		const builtins = ["read", "bash", "edit", "write", "mcp__late"];
+		const h = harness({ ui: new FakeUi(), builtins, activeTools: ["read", "bash", "edit", "write"] });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect");
+		await h.startRun();
+		h.pi.setActiveTools([...h.active(), "mcp__late"]);
+		await h.fire("turn_start", { turnIndex: 1, timestamp: 0 });
+		assert.ok(!h.active().includes("mcp__late"));
+		assert.deepEqual(h.entries.at(-1)!.data, { v: 1, type: "tools", turnedOff: ["mcp__late"] });
+	});
+
 	it("leaves the tools alone in a session that was never in architect mode", async () => {
 		const h = harness({ ui: new FakeUi(), activeTools: ["read", "bash"] });
 		await h.fire("session_start", { reason: "startup" });

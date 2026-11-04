@@ -270,7 +270,7 @@ The completion lists the subcommands with a short description, and `open`, `writ
 
 - Edit and write tools are off. Tools are an allowlist: read, grep, find, ls, bash and `architect_*`. Any other tool call, including tools from other extensions, is blocked with a reason that names the allowed tools and `/architect build`.
   Architect mode also turns every other tool off, so its schema is not sent, and build mode turns exactly those back on.
-  The mode event records which tools it turned off, because Pi restores the tool set from the transcript after a reload. A tool that turns on later, like an MCP tool that registers late, is turned off before the next request and recorded too.
+  The mode event records which tools it turned off, because Pi restores the tool set from the transcript after a reload. A tool that turns on later, like an MCP tool that registers late, is turned off at the start of the next turn, also in the middle of a run, and recorded too.
 - Each architect tool is only on in its phases: `architect_update` and `architect_advance` always, `architect_decide` in Decide, `architect_diagram` from Explore on and `architect_slice` in Slice and Blueprint.
 - Bash runs only allowlisted read-only commands. Every command in a chain or pipeline must pass. The check fails closed.
 - Words must be literal. The lexer refuses anything bash would expand before the command runs: `$` in any form (variables, `$(…)`, `$'…'`, `$"…"`), backticks, brace expansion, `~user` and `~` after `=` or `:`, and process substitution. Otherwise `find . {-exec,} sh` or `find . -exec$U sh` would reach bash as `-exec`. Variable assignments, alone or before a command, are refused too.
