@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { counts, missing, nextId, phaseState, phaseTitle, sliceProblems, slugify } from "../src/state/queries.ts";
+import { counts, missing, nextId, phaseState, sliceProblems, slugify } from "../src/state/queries.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture, Slice } from "../src/state/types.ts";
 
@@ -43,10 +43,6 @@ describe("ids and names", () => {
 		assert.equal(slugify("???"), "feature");
 		assert.ok(slugify("a ".repeat(80)).length <= 60);
 		assert.doesNotMatch(slugify("word ".repeat(30)), /-$/);
-	});
-
-	it("phaseTitle shows the position", () => {
-		assert.equal(phaseTitle("decide"), "Decide 3/6");
 	});
 });
 

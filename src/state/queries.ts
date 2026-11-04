@@ -1,4 +1,4 @@
-import { PHASE_LABEL, PHASES, phaseIndex, type Phase } from "./phases.ts";
+import { phaseIndex, type Phase } from "./phases.ts";
 import type { Architecture, PhaseState, Slice } from "./types.ts";
 
 /** How `phase` stands in the architecture: approved, working, in review or pending. */
@@ -115,9 +115,4 @@ export function missing(arch: Architecture): string[] {
 		case "blueprint":
 			return [];
 	}
-}
-
-/** "Decide 3/6". */
-export function phaseTitle(phase: Phase): string {
-	return `${PHASE_LABEL[phase]} ${phaseIndex(phase) + 1}/${PHASES.length}`;
 }

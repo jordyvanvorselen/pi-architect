@@ -16,7 +16,7 @@ const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType:
 function inDecide(): BranchEntry[] {
 	return [
 		entry({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
-		entry({ type: "mode", mode: "architect", at: 2 }),
+		entry({ type: "mode", mode: "architect", at: 2, turnedOff: ["edit", "write"] }),
 		entry({ type: "verdict", phase: "frame", verdict: "approved", at: 3 }),
 		entry({ type: "verdict", phase: "explore", verdict: "approved", at: 4 }),
 	];

@@ -11,7 +11,7 @@ const ev = (data: Record<string, unknown>) => ({ type: "custom", customType: ENT
 /** A Frame that the agent sent to review, and Pi quit before the user answered. */
 const inReview = () => [
 	ev({ type: "begin", feature: "Dedupe", slug: "dedupe", at: 1 }),
-	ev({ type: "mode", mode: "architect", at: 1 }),
+	ev({ type: "mode", mode: "architect", at: 1, turnedOff: ["edit", "write"] }),
 	ev({ type: "update", phase: "frame", brief: { goal: "g", doneWhen: ["d"] } }),
 	ev({ type: "submit", phase: "frame", at: 2 }),
 ];

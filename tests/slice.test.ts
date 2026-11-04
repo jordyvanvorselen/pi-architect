@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { buildGroups, buildOrder, orderLine } from "../src/plan/order.ts";
+import { buildGroups, buildOrder } from "../src/plan/order.ts";
 import { event } from "../src/state/events.ts";
 import { newArchitecture, reduce } from "../src/state/reducer.ts";
 import type { Architecture, Slice } from "../src/state/types.ts";
 import { Rejections } from "../src/tools/common.ts";
-import { planSlices, prepareSliceArgs, sliceErrors, type SliceInput } from "../src/tools/slice.ts";
+import { planSlices, prepareSliceArgs, type SliceInput } from "../src/tools/slice.ts";
 import { sliceCall, sliceResult } from "../src/ui/slice.ts";
 import { plainTheme, tagTheme } from "./helpers.ts";
 
@@ -45,6 +45,20 @@ function error(arch: Architecture, slices: In[]): string {
 		return (e as Error).message;
 	}
 	assert.fail("planSlices accepted the slices");
+}
+
+/** Every problem `architect_slice` finds with the slices, one line each. None when it saves them. */
+function sliceErrors(slices: Slice[]): string[] {
+	const input = slices.map(({ dependsOn, ...s }) => ({ ...s, depends_on: dependsOn }));
+	try {
+		planSlices(at(), { slices: input as In[] });
+		return [];
+	} catch (e) {
+		return (e as Error).message
+			.split("\n")
+			.slice(1)
+			.map((l) => l.replace(/^- /, ""));
+	}
 }
 
 describe("prepareSliceArgs", () => {
@@ -177,7 +191,6 @@ describe("build order", () => {
 			order.map((o) => `${o.number}:${o.slice.id}@${o.step}`),
 			["1:a@1", "2:e@1", "3:b@2", "4:c@2", "5:d@3"],
 		);
-		assert.equal(orderLine(order), "1, 2 → 3, 4 → 5");
 	});
 
 	it("ignores unknown and self dependencies, and puts a cycle last instead of losing it", () => {
@@ -186,7 +199,6 @@ describe("build order", () => {
 			[["a"], ["b", "c"]],
 		);
 		assert.deepEqual(buildGroups([]), []);
-		assert.equal(orderLine([]), "");
 	});
 });
 

@@ -2,9 +2,6 @@ import { eventsFrom, type ArchitectEvent, type EntryLike, type UpdateEvent } fro
 import { nextPhase } from "./phases.ts";
 import type { ArchitectState, Architecture, Brief } from "./types.ts";
 
-/** What architect mode turned off before mode events recorded it: the write tools. */
-const LEGACY_TURNED_OFF = ["edit", "write", "powershell"];
-
 const names = (items: readonly unknown[]) => items.filter((t): t is string => typeof t === "string");
 
 /** A new session: build mode, no architecture. */
@@ -128,7 +125,7 @@ export function reduce(state: ArchitectState, event: ArchitectEvent): ArchitectS
 				...state,
 				mode: "architect",
 				architecture: state.architecture ?? newArchitecture(event.at),
-				turnedOff: Array.isArray(event.turnedOff) ? names(event.turnedOff) : LEGACY_TURNED_OFF,
+				turnedOff: Array.isArray(event.turnedOff) ? names(event.turnedOff) : [],
 			};
 		}
 		case "tools":
