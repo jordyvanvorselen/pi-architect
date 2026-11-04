@@ -37,7 +37,11 @@ export const DecideParams = Type.Object(
 			}),
 		),
 		total: Type.Optional(
-			Type.Integer({ minimum: 1, description: "How many decisions you expect in this phase, if you know." }),
+			Type.Integer({
+				minimum: 1,
+				description:
+					'Your estimate of how many decisions this phase needs in all, if you know. The card shows "Decision 1 of about 3".',
+			}),
 		),
 	},
 	{ additionalProperties: false },
@@ -95,7 +99,7 @@ export interface DecideDetails {
 	/** What the user asked instead of choosing. */
 	asked?: string;
 	recommended?: string;
-	/** 1-based position, and the expected number of decisions when the agent said. */
+	/** 1-based position, and the agent's estimate of the number of decisions when it gave one. */
 	index: number;
 	total?: number;
 }
@@ -219,6 +223,8 @@ export async function decide(
 	deps.append({ type: "decision", decision });
 	const arch = deps.state().architecture!;
 	const index = arch.decisions.findIndex((d) => d.id === decision.id) + 1;
+	// The card counts the decisions that are raised. The agent's total is an estimate, and only shows as one.
+	const raised = arch.decisions.length;
 	const base: Omit<DecideDetails, "outcome"> = {
 		id: decision.id,
 		question: decision.question,
@@ -238,7 +244,8 @@ export async function decide(
 		{
 			decision,
 			index,
-			...(base.total ? { total: base.total } : {}),
+			...(raised > 1 ? { total: raised } : {}),
+			...(params.total && params.total > raised ? { expected: params.total } : {}),
 			...(arch.feature ? { feature: arch.feature } : {}),
 			...(signal ? { signal } : {}),
 		},

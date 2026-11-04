@@ -166,6 +166,13 @@ describe("decision card layout", () => {
 		assert.ok(bare.some((l) => l.includes("┏━ B")));
 		const unsure = renderDecision({ decision: DECISION, focus: 0, mode: "browse", index: 6, total: 5 }, 80);
 		assert.match(paintLine(unsure[0]!, plainTheme), /Decision 6\/6/);
+		const estimate = renderDecision({ decision: DECISION, focus: 0, mode: "browse", index: 1, expected: 3 }, 80);
+		assert.match(paintLine(estimate[0]!, plainTheme), /◆ Decision 1 of about 3 ─/);
+		const counted = renderDecision(
+			{ decision: DECISION, focus: 0, mode: "browse", index: 2, total: 3, expected: 3 },
+			80,
+		);
+		assert.match(paintLine(counted[0]!, plainTheme), /◆ Decision 2\/3 ─/);
 		const noReason = { ...DECISION, reason: undefined } as unknown as Decision;
 		const lines = renderDecision({ decision: noReason, focus: 0, mode: "browse" }, 80).map((l) =>
 			paintLine(l, plainTheme),
