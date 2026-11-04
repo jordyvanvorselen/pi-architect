@@ -86,6 +86,7 @@ function footer(view: ReviewView, inner: number, scrollable: boolean): Line[] {
 				[
 					["↵", "send"],
 					["shift+↵", "new line"],
+					...(scrollable ? ([["alt+\u2191\u2193", "scroll"]] as const) : []),
 					["esc", "back"],
 				],
 				inner,

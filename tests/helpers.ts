@@ -76,6 +76,11 @@ export const KEYS = {
 	home: "\x1b[H",
 	end: "\x1b[F",
 	shiftEnter: "\x1b[13;2u",
+	altUp: "\x1b[1;3A",
+	altDown: "\x1b[1;3B",
+	altJ: "\x1bj",
+	altK: "\x1bk",
+	ctrlJ: "\n",
 } as const;
 
 /** Each character of `text` as a key. */

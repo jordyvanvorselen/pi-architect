@@ -525,6 +525,27 @@ describe("phase review keys", () => {
 		assert.deepEqual(s.answers, [{ verdict: "changes", comment: "tighten it" }]);
 	});
 
+	it("alt+↑↓ and alt+j/k keep scrolling the phase while the editor is open, so the user can reread it", () => {
+		const s = screen("slice", ARCH, 24);
+		s.lines(80);
+		s.keys("r", ...type("first"));
+		assert.match(s.lines(80).join("\n"), /alt\+↑↓ scroll/);
+		s.keys(KEYS.altDown, KEYS.altJ);
+		assert.equal(s.component.state.scroll, 2, "alt+↓ and alt+j scroll down");
+		s.keys(KEYS.altUp);
+		assert.equal(s.component.state.scroll, 1, "alt+↑ scrolls up");
+		s.keys(KEYS.altK);
+		assert.deepEqual(s.component.state, { scroll: 0, mode: "changes" }, "alt+k scrolls up, the editor stays open");
+		s.keys(KEYS.pageDown, KEYS.ctrlJ, ...type("second"));
+		assert.equal(s.component.state.scroll, 0, "PgDn and ctrl+j stay with the editor");
+		s.keys(KEYS.enter);
+		assert.deepEqual(
+			s.answers,
+			[{ verdict: "changes", comment: "first\nsecond" }],
+			"ctrl+j is Pi's new line, so it cannot scroll",
+		);
+	});
+
 	it("esc steps back from the editor keeping the draft, and closes the screen", () => {
 		const s = screen("frame");
 		s.keys("r", ...type("draft"), KEYS.escape);
