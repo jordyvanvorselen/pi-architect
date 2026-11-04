@@ -41,13 +41,6 @@ export function buildOrder(slices: readonly Slice[]): Ordered[] {
 	return result;
 }
 
-/** `1 → 2, 3 → 4`: the numbers of each group, for one-line summaries. */
-export function orderLine(order: readonly Ordered[]): string {
-	const groups: number[][] = [];
-	for (const o of order) (groups[o.step - 1] ??= []).push(o.number);
-	return groups.map((g) => g.join(", ")).join(" → ");
-}
-
 /** A file that slices in the same build step all change. */
 export interface SharedFile {
 	file: string;

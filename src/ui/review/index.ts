@@ -59,6 +59,3 @@ export function createPhaseReview(
 		);
 	};
 }
-
-/** The default review screen. */
-export const phaseReview: ReviewUi = createPhaseReview();

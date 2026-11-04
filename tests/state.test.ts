@@ -63,8 +63,8 @@ describe("mode", () => {
 		assert.deepEqual(back.turnedOff, ["edit", "mcp__web", "mcp__db"]);
 		const again = reduce(back, event({ type: "mode", mode: "architect", at: 3, turnedOff: [] }));
 		assert.deepEqual(again.turnedOff, []);
-		// Events from before the field existed: architect mode turned the write tools off.
-		assert.deepEqual(replay({ type: "mode", mode: "architect", at: 1 }).turnedOff, ["edit", "write", "powershell"]);
+		// A mode event without the field records nothing.
+		assert.deepEqual(replay({ type: "mode", mode: "architect", at: 1 }).turnedOff, []);
 		assert.equal(rebuild([]).turnedOff, undefined);
 	});
 });
@@ -87,7 +87,7 @@ describe("begin and reset", () => {
 			{ type: "mode", mode: "build", at: 2 },
 			{ type: "reset", at: 3 },
 		);
-		assert.deepEqual(state, { mode: "build", turnedOff: ["edit", "write", "powershell"] });
+		assert.deepEqual(state, { mode: "build", turnedOff: [] });
 	});
 
 	it("reset in architect mode starts over with an empty architecture", () => {

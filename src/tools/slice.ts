@@ -147,11 +147,6 @@ export function sliceIssues(slices: readonly Slice[]): SliceIssue[] {
 	return issues;
 }
 
-/** Every problem with the slices, one line each. */
-export function sliceErrors(slices: readonly Slice[]): string[] {
-	return sliceIssues(slices).map((i) => i.text);
-}
-
 /** What a value that passes looks like, for a kind the model got wrong twice in a row. */
 function example(kind: SliceIssue["kind"], slices: readonly Slice[]): string | undefined {
 	const file = slices.find((s) => s.files.length)?.files[0] ?? "src/store.ts";

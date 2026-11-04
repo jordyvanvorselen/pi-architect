@@ -10,7 +10,7 @@ import type { Architecture } from "../src/state/types.ts";
 import { GRACE_MS, InputGrace } from "../src/ui/grace.ts";
 import type { ScreenOptions } from "../src/ui/screen-options.ts";
 import { moduleTree } from "../src/ui/review/explore.ts";
-import { createPhaseReview, phaseReview, REVIEW_BODIES, renderReview, ReviewScreen } from "../src/ui/review/index.ts";
+import { createPhaseReview, REVIEW_BODIES, renderReview, ReviewScreen } from "../src/ui/review/index.ts";
 import { reviewGeometry } from "../src/ui/review/screen.ts";
 import { FALLBACK_CHROME, TRANSCRIPT_ROWS } from "../src/ui/room.ts";
 import { fullArchitecture } from "./fixtures/plan/architecture.ts";
@@ -561,6 +561,7 @@ describe("the review screen entry point", () => {
 	});
 
 	it("closes on interrupt, also when already interrupted", async () => {
+		const phaseReview = createPhaseReview();
 		const controller = new AbortController();
 		const ui = new FakeUi().keys([() => controller.abort(), KEYS.enter]);
 		const signal = controller.signal;
@@ -573,6 +574,7 @@ describe("the review screen entry point", () => {
 	});
 
 	it("falls back to the select dialog outside the terminal", async () => {
+		const phaseReview = createPhaseReview();
 		const ui = new FakeUi({ select: ["Approve Frame"] });
 		assert.deepEqual(await phaseReview({ arch: ARCH, phase: "frame" }, { mode: "rpc", ui } as never), {
 			verdict: "approved",

@@ -34,6 +34,3 @@ export const createDecisionCard =
 			{ blocked: { kind: "question", message: request.decision.question } },
 		);
 	};
-
-/** The default decision card. */
-export const decisionCard: DecisionUi = createDecisionCard();
