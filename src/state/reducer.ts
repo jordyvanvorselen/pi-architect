@@ -2,6 +2,11 @@ import { eventsFrom, type ArchitectEvent, type EntryLike, type UpdateEvent } fro
 import { nextPhase } from "./phases.ts";
 import type { ArchitectState, Architecture, Brief } from "./types.ts";
 
+/** What architect mode turned off before mode events recorded it: the write tools. */
+const LEGACY_TURNED_OFF = ["edit", "write", "powershell"];
+
+const names = (items: readonly unknown[]) => items.filter((t): t is string => typeof t === "string");
+
 /** A new session: build mode, no architecture. */
 export const INITIAL_STATE: ArchitectState = { mode: "build" };
 
@@ -119,16 +124,16 @@ export function reduce(state: ArchitectState, event: ArchitectEvent): ArchitectS
 	switch (event.type) {
 		case "mode": {
 			if (event.mode === "build") return { ...state, mode: "build" };
-			const keptOff = Array.isArray(event.keptOff)
-				? event.keptOff.filter((t) => typeof t === "string")
-				: (state.keptOff ?? []);
 			return {
 				...state,
 				mode: "architect",
 				architecture: state.architecture ?? newArchitecture(event.at),
-				keptOff,
+				turnedOff: Array.isArray(event.turnedOff) ? names(event.turnedOff) : LEGACY_TURNED_OFF,
 			};
 		}
+		case "tools":
+			if (!Array.isArray(event.turnedOff)) return state;
+			return { ...state, turnedOff: [...new Set([...(state.turnedOff ?? []), ...names(event.turnedOff)])] };
 		// A new architecture or a reset keeps the plan: the file is still there, and build mode still builds it.
 		case "begin":
 			return { ...state, architecture: newArchitecture(event.at, event.feature, event.slug) };

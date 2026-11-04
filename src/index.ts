@@ -16,7 +16,7 @@ import {
 	modeToldToModel,
 	SECTION,
 } from "./prompt.ts";
-import { blockReason, WRITE_TOOLS } from "./readonly/index.ts";
+import { allowedInArchitect, blockReason } from "./readonly/index.ts";
 import { REVIEW_MESSAGE, Reviews } from "./reopen.ts";
 import type { DecisionUi } from "./decision.ts";
 import type { ReviewUi } from "./review.ts";
@@ -65,8 +65,6 @@ export function flagHelp(name: string, type: "boolean" | "string", text: string)
 
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
-/** Tools architect mode turns off. */
-const OFF_IN_ARCHITECT: readonly string[] = [...WRITE_TOOLS, "powershell"];
 
 /** Test seams. Pi calls the factory with `pi` only. */
 export interface ArchitectOverrides {
@@ -117,11 +115,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	const boards = new BoardSession();
 
 	/**
-	 * Make the active tools fit the mode and the phase. Architect mode turns the write tools off and the
-	 * architect tools of the current phase on (see `phaseTools`).
-	 * Build mode turns the architect tools off and every write tool back on, except the ones the user already
-	 * had off before architect mode. Pi restores the tool set from the transcript after a reload, a resume or
-	 * /tree, so this works from the state alone and never from what it turned off in memory.
+	 * Make the active tools fit the mode and the phase. Architect mode turns off every tool the read-only
+	 * allowlist does not allow, so their schemas are not sent, and the architect tools of the current phase on
+	 * (see `phaseTools`). Build mode turns the architect tools off and exactly the tools architect mode turned
+	 * off back on. Pi restores the tool set from the transcript after a reload, a resume or /tree, so this works
+	 * from the state alone and never from what it turned off in memory.
 	 */
 	function applyTools(): void {
 		const active = pi.getActiveTools();
@@ -129,11 +127,14 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		let next: string[];
 		if (state.mode === "architect") {
 			const wanted = phaseTools(state.architecture).filter((n) => all.has(n));
-			const kept = active.filter((n) => !OFF_IN_ARCHITECT.includes(n) && (!isArchitectTool(n) || wanted.includes(n)));
+			const kept = active.filter((n) => allowedInArchitect(n) && (!isArchitectTool(n) || wanted.includes(n)));
 			next = [...new Set([...kept, ...wanted])];
+			// Tools that turned on since, e.g. MCP tools that registered late: off too, and remembered.
+			const known = new Set(state.turnedOff ?? []);
+			const late = active.filter((n) => !allowedInArchitect(n) && !known.has(n));
+			if (late.length) append({ type: "tools", turnedOff: late });
 		} else {
-			const keptOff = state.keptOff;
-			const back = keptOff ? OFF_IN_ARCHITECT.filter((n) => all.has(n) && !keptOff.includes(n)) : [];
+			const back = (state.turnedOff ?? []).filter((n) => all.has(n));
 			next = [...new Set([...active.filter((n) => !isArchitectTool(n)), ...back])];
 		}
 		if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
@@ -143,15 +144,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	const toolKey = (s: ArchitectState) =>
 		s.mode === "architect" ? `architect:${phaseTools(s.architecture).join(",")}` : "build";
 
-	/** The event that switches mode. Entering architect mode remembers which write tools were already off. */
+	/** The event that switches mode. Entering architect mode remembers which tools it turns off. */
 	function modeEvent(mode: Mode): EventInput {
 		if (mode === "build") return { type: "mode", mode, at: now() };
-		const active = new Set(pi.getActiveTools());
-		const keptOff = pi
-			.getAllTools()
-			.map((t) => t.name)
-			.filter((n) => OFF_IN_ARCHITECT.includes(n) && !active.has(n));
-		return { type: "mode", mode, at: now(), keptOff };
+		const turnedOff = pi.getActiveTools().filter((n) => !allowedInArchitect(n));
+		return { type: "mode", mode, at: now(), turnedOff };
 	}
 
 	function refresh(): void {
@@ -619,6 +616,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	pi.on("before_agent_start", async (event, ctx) => {
 		ctxRef = ctx;
+		// Tools can register after architect mode started, e.g. MCP tools: turn them off before the request.
+		if (state.mode === "architect") applyTools();
 		const sections = event.systemPromptOptions.sections;
 		const section =
 			architectSection(state, {
