@@ -133,7 +133,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Slice     | The slices in build order, with arrows, files, steps and verify       |
 | Blueprint | Everything on one page, and the path the plan file will be written to |
 
-Long screens scroll with ↑/↓ or j/k, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
+Long screens scroll with ↑/↓ or j/k, PgUp/PgDn, space, Home and End. When the phase does not fit, the agent's summary shrinks to two lines, and on very short terminals it goes. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
 
 esc closes the screen, but first asks in the bottom bar: `Close without a verdict? The agent will stop.  ↵ close  esc back`.
 A closed review tells the agent the user closed it, and the agent stops. `/architect review` opens the same review again, with the agent's summary.

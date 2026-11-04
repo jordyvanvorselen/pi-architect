@@ -335,6 +335,13 @@ describe("phase review screens", () => {
 		assert.match(text("slice", 80, { ...ARCH, slices: cycle }), /● 1 {2}Docs {2}← 2[\s\S]*● 2 {2}Docs {2}← 1/);
 	});
 
+	it("Slice cuts a long title instead of the dependencies after it", () => {
+		const title = "Wire the dedupe window into the processor and the backend event store";
+		const slices = [ARCH.slices[0]!, { ...ARCH.slices[1]!, title, dependsOn: [ARCH.slices[0]!.id] }];
+		const t = text("slice", 60, { ...ARCH, slices });
+		assert.match(t, /● 2 {2}Wire the dedupe[^\n]*… {2}← 1 +│/);
+	});
+
 	it("Slice keeps the rail to the next slice on wrapped lines too", () => {
 		const lines = screen("slice", { ...fullArchitecture(), phase: "slice" }).lines(60);
 		const start = lines.findIndex((l) => l.includes("● 1 "));
@@ -590,6 +597,21 @@ describe("the review screen entry point", () => {
 		assert.deepEqual(await phaseReview({ arch: ARCH, phase: "frame" }, { mode: "rpc", ui } as never), {
 			verdict: "approved",
 		});
+	});
+
+	it("shortens a long summary to two lines when the body does not fit", () => {
+		const body = Array.from({ length: 40 }, (_, i) => [sp(`line ${i}`)]);
+		const summary = Array.from({ length: 8 }, (_, i) => `Sentence ${i} of what the agent asks the user to check.`).join(
+			" ",
+		);
+		const rows = (maxRows?: number) =>
+			renderReview({ phase: "frame", body, summary, scroll: 0, mode: "browse", ...(maxRows ? { maxRows } : {}) }, 60)
+				.lines.map((l) => paintLine(l, plainTheme))
+				.filter((l) => l.includes("▍"));
+		assert.ok(rows().length > 2, "in full while everything fits");
+		const short = rows(24);
+		assert.equal(short.length, 2);
+		assert.match(short[1]!, /…/);
 	});
 
 	it("gives up the summary, then body rows, on short terminals, and caps the width", () => {

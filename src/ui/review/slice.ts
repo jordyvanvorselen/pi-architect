@@ -24,12 +24,11 @@ function field(rail: Line, label: string, text: string, width: number, color: "t
 function sliceLines(slice: Slice, number: string, deps: string[], linked: boolean, width: number): Line[] {
 	const rail: Line = [sp(linked ? "│   " : "    ", "borderAccent")];
 	const after = deps.length ? [sp("  ← ", "accent"), sp(deps.join(", "), "accent")] : [];
-	const lines: Line[] = [
-		clipLine(
-			[sp("● ", "accent"), sp(number, "accent", true), sp("  "), sp(slice.title, "text", true), ...after],
-			width,
-		),
-	];
+	const head: Line = [sp("● ", "accent"), sp(number, "accent", true), sp("  ")];
+	// A long title gives way, so the dependencies after it stay in view.
+	const room = width - lineWidth(head) - lineWidth(after);
+	const title = room >= 4 ? clipLine([sp(slice.title, "text", true)], room) : [sp(slice.title, "text", true)];
+	const lines: Line[] = [clipLine([...head, ...title, ...after], width)];
 	if (slice.goal) lines.push(...railed(rail, rail, slice.goal, width, "muted"));
 	if (slice.files.length) lines.push(...field(rail, "files", slice.files.join(", "), width, "muted"));
 	slice.steps.forEach((step, i) => lines.push(...field(rail, i ? "" : "steps", `${i + 1}. ${step}`, width, "text")));
