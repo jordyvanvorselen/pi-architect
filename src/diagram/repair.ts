@@ -1,5 +1,5 @@
-// Safe repairs for the slips a model makes most when it draws boxes: a corner or a side one column off, and a
-// line that meets a box edge without a junction. Each repair is tried on a copy and kept only when the linter
+// Safe repairs for the slips a model makes most when it draws boxes: a corner or a side one or two columns off,
+// a corner of the other style, and a line that meets a box edge without a junction. Each repair is tried on a copy and kept only when the linter
 // then finds strictly less and nothing new, so a repair can never make a drawing worse. Anything with more than
 // one reading is left for the model to fix.
 import {
@@ -23,7 +23,7 @@ import {
 	UP,
 	type Box,
 } from "./grid.ts";
-import { type DiagramFinding, lintBody } from "./lint.ts";
+import { type DiagramFinding, lintBody, matchingCorner, oddCorner } from "./lint.ts";
 
 /** One repair, 1-based like the linter's findings, with what was done. */
 export interface DiagramRepair {
@@ -42,6 +42,9 @@ interface Candidate {
 	cells: { r: number; c: number; ch: string }[];
 	repair: DiagramRepair;
 }
+
+/** Most columns a corner or a side may be off and still be moved: more is a different drawing, not a slip. */
+const MAX_SHIFT = 2;
 
 /** Most repairs in one drawing. More slips than this and the drawing needs the model's eye, not patches. */
 const MAX_REPAIRS = 12;
@@ -102,6 +105,7 @@ function apply(grid: Grid, candidate: Candidate): string[] {
 function* candidates(grid: Grid): Generator<Candidate> {
 	yield* cornerRepairs(grid);
 	yield* sideRepairs(grid);
+	yield* cornerStyleRepairs(grid);
 	yield* junctionRepairs(grid);
 }
 
@@ -145,7 +149,7 @@ function* cornerRepairs(grid: Grid): Generator<Candidate> {
 			const rightEnd = run(grid, top, right);
 			if (isBottomLeft(grid.at(leftEnd, left))) {
 				const end = bottomEdge(grid, leftEnd, left);
-				if (end < 0 || Math.abs(end - right) !== 1) continue;
+				if (end < 0 || end === right || Math.abs(end - right) > MAX_SHIFT) continue;
 				const atTop = rightEnd >= leftEnd;
 				const atBottom = run(grid, top, end) >= leftEnd;
 				if (atTop === atBottom) continue;
@@ -153,7 +157,7 @@ function* cornerRepairs(grid: Grid): Generator<Candidate> {
 				if (move) yield move;
 			} else if (isBottomRight(grid.at(rightEnd, right))) {
 				const start = bottomStart(grid, rightEnd, right);
-				if (start < 0 || Math.abs(start - left) !== 1) continue;
+				if (start < 0 || start === left || Math.abs(start - left) > MAX_SHIFT) continue;
 				const atTop = leftEnd >= rightEnd;
 				const atBottom = run(grid, top, start) >= rightEnd;
 				if (atTop === atBottom) continue;
@@ -166,26 +170,36 @@ function* cornerRepairs(grid: Grid): Generator<Candidate> {
 	}
 }
 
-/** Move the corner at (r, from) one column to `to`, so it lines up with the corner on row `other`. */
+/**
+ * Move the corner at (r, from) one or two columns to `to`, so it lines up with the corner on row `other`.
+ * Every cell it passes must be part of its own edge, or a space nothing else reaches into.
+ */
 function moveCorner(grid: Grid, r: number, from: number, to: number, other: number): Candidate | undefined {
 	if (grid.wide[r]?.size) return undefined;
 	const corner = grid.at(r, from);
 	const a = arms(corner);
-	const toward = to > from ? RIGHT : LEFT;
+	const s = to > from ? 1 : -1;
+	const toward = s > 0 ? RIGHT : LEFT;
 	const vertical = a & (UP | DOWN);
+	const between: number[] = [];
+	for (let c = from + s; c !== to; c += s) between.push(c);
 	const cells: Candidate["cells"] = [];
 	if (a & toward) {
-		// The edge is one too long: the corner steps onto the last edge cell, and its old cell clears.
-		if (grid.at(r, to) !== PLAIN_H && !isHorizontal(grid.at(r, to))) return undefined;
+		// The edge is too long: the corner steps back onto the edge, and the cells it leaves clear.
+		if (!isHorizontal(grid.at(r, to))) return undefined;
 		if (reachedFrom(grid, r, from, [toward])) return undefined;
-		cells.push({ r, c: to, ch: corner }, { r, c: from, ch: " " });
+		for (const c of between)
+			if (!isHorizontal(grid.at(r, c)) || reachedFrom(grid, r, c, [LEFT, RIGHT])) return undefined;
+		cells.push({ r, c: to, ch: corner }, ...[from, ...between].map((c) => ({ r, c, ch: " " })));
 	} else {
-		// The edge is one too short: the corner steps into the space, and the edge grows into its old cell.
+		// The edge is too short: the corner steps into the space, and the edge grows into the cells it leaves.
 		if (!isBlank(grid.at(r, to))) return undefined;
 		if (reachedFrom(grid, r, from, [OPPOSITE[toward]!])) return undefined;
 		if (reachedFrom(grid, r, to, [vertical === UP ? UP : DOWN, OPPOSITE[toward]!])) return undefined;
-		const edge = grid.at(r, from - (to - from));
-		cells.push({ r, c: to, ch: corner }, { r, c: from, ch: isHorizontal(edge) ? edge : PLAIN_H });
+		for (const c of between) if (!isBlank(grid.at(r, c)) || reachedFrom(grid, r, c, [])) return undefined;
+		const edge = grid.at(r, from - s);
+		const fill = isHorizontal(edge) ? edge : PLAIN_H;
+		cells.push({ r, c: to, ch: corner }, ...[from, ...between].map((c) => ({ r, c, ch: fill })));
 	}
 	return {
 		cells,
@@ -198,8 +212,8 @@ function moveCorner(grid: Grid, r: number, from: number, to: number, other: numb
 }
 
 /**
- * A closed box with one side broken on some rows, where that side's line sits exactly one column off on each
- * of them and the side's own column is a space there.
+ * A closed box with one side broken on some rows, where that side's line sits one column off on each of them,
+ * or two columns off to the same side on all of them, with only spaces between it and the side's own column.
  */
 function* sideRepairs(grid: Grid): Generator<Candidate> {
 	for (let top = 0; top < grid.height; top++) {
@@ -219,16 +233,23 @@ function* sideRepairs(grid: Grid): Generator<Candidate> {
 			const moved: string[] = [];
 			const filled = new Set<number>();
 			const chars = new Set<string>();
-			for (const r of rows) {
-				const move = moveSide(grid, box, r, col, new Set(rows));
-				if (!move) {
-					cells.length = 0;
-					break;
+			for (let shift = 1; shift <= MAX_SHIFT && !cells.length; shift++) {
+				const offsets = new Set<number>();
+				for (const r of rows) {
+					const move = moveSide(grid, box, r, col, new Set(rows), shift);
+					// Two columns off is a slip only when every row slipped the same way.
+					if (move) offsets.add(move.from - col);
+					if (!move || (shift > 1 && offsets.size > 1)) {
+						cells.length = moved.length = 0;
+						filled.clear();
+						chars.clear();
+						break;
+					}
+					cells.push(...move.cells);
+					moved.push(`${move.from + 1}`);
+					for (const c of move.filled) filled.add(c + 1);
+					chars.add(grid.at(r, move.from));
 				}
-				cells.push(...move.cells);
-				moved.push(`${move.from + 1}`);
-				if (move.filled) filled.add(move.from + 1);
-				chars.add(grid.at(r, move.from));
 			}
 			if (!cells.length) continue;
 			const lines = rows.map((r) => r + 1);
@@ -257,33 +278,60 @@ function moveSide(
 	r: number,
 	col: number,
 	moving: Set<number>,
-): { cells: Candidate["cells"]; from: number; filled: boolean } | undefined {
+	shift: number,
+): { cells: Candidate["cells"]; from: number; filled: number[] } | undefined {
 	if (grid.wide[r]?.size || !isBlank(grid.at(r, col))) return undefined;
-	const found = [col - 1, col + 1].filter((c) => c !== box.left && c !== box.right && isVertical(grid.at(r, c)));
+	const found = [col - shift, col + shift].filter(
+		(c) => c !== box.left && c !== box.right && isVertical(grid.at(r, c)),
+	);
 	if (found.length !== 1) return undefined;
 	const from = found[0]!;
+	const s = from > col ? 1 : -1;
+	const between: number[] = [];
+	for (let c = col + s; c !== from; c += s) between.push(c);
+	if (!between.every((c) => isBlank(grid.at(r, c)))) return undefined;
 	const ch = grid.at(r, from);
 	const a = arms(ch);
-	const away = from > col ? RIGHT : LEFT;
+	const away = s > 0 ? RIGHT : LEFT;
 	// Lines above or below the old cell belong to something else, unless they are the same side moving too.
 	if (arms(grid.at(r - 1, from)) & DOWN && !moving.has(r - 1)) return undefined;
 	if (arms(grid.at(r + 1, from)) & UP && !moving.has(r + 1)) return undefined;
 	let fill = " ";
 	if (a & away) {
-		// A junction whose line goes on outward: the line grows into the old cell.
-		if (!(arms(grid.at(r, from + (from - col))) & OPPOSITE[away]!)) return undefined;
+		// A junction whose line goes on outward: the line grows into the cells the side leaves.
+		if (!(arms(grid.at(r, from + s)) & OPPOSITE[away]!)) return undefined;
 		fill = PLAIN_H;
-	} else if (arms(grid.at(r, from + (from - col))) & OPPOSITE[away]!) return undefined;
+	} else if (arms(grid.at(r, from + s)) & OPPOSITE[away]!) return undefined;
 	// An arm toward the side's column would point past it after the move.
-	if (a & OPPOSITE[away]! && !(arms(grid.at(r, col - (from - col))) & away)) return undefined;
+	if (a & OPPOSITE[away]! && !(arms(grid.at(r, col - s)) & away)) return undefined;
+	const left = [...between, from];
 	return {
-		cells: [
-			{ r, c: col, ch },
-			{ r, c: from, ch: fill },
-		],
+		cells: [{ r, c: col, ch }, ...left.map((c) => ({ r, c, ch: fill }))],
 		from,
-		filled: fill === PLAIN_H,
+		filled: fill === PLAIN_H ? left : [],
 	};
+}
+
+/** A closed box with one corner of the other light style, like `┐` among `╭ ╰ ╯`: make it match the others. */
+function* cornerStyleRepairs(grid: Grid): Generator<Candidate> {
+	for (const box of findBoxes(grid)) {
+		const cells: [number, number][] = [
+			[box.top, box.left],
+			[box.top, box.right],
+			[box.bottom, box.left],
+			[box.bottom, box.right],
+		];
+		const odd = oddCorner(cells.map(([r, c]) => grid.at(r, c)));
+		if (!odd) continue;
+		const [r, c] = cells[odd.index]!;
+		const ch = grid.at(r, c);
+		const to = matchingCorner(ch, odd.style);
+		if (!to) continue;
+		yield {
+			cells: [{ r, c, ch: to }],
+			repair: { line: r + 1, col: c + 1, message: `changed ${ch} to ${to}, like the other corners of the box` },
+		};
+	}
 }
 
 /** A straight light line that meets a light box edge without a junction: draw the junction it clearly needs. */

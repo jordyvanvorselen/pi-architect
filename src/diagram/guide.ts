@@ -17,8 +17,9 @@ export const GUIDE_EXAMPLE = [
 export function diagramGuide(maxWidth = DEFAULT_MAX_WIDTH): string {
 	return [
 		"Draw diagrams yourself as Unicode text. Pick whatever layout shows the idea most clearly.",
-		"- Boxes: ╭───╮ │ x │ ╰───╯. Every line of a box is the same width, so each side stays in one column.",
+		"- Boxes: ╭───╮ │ x │ ╰───╯, one corner style per box. Every line of a box is the same width, so each side stays in one column.",
 		"- Count columns, not characters. Avoid emoji and CJK inside boxes: they take 2 columns each.",
+		"- Bash cannot count columns for you in architect mode. Build every row of a box from one template: write the top edge, pad each text row with spaces to exactly its width, and give the bottom edge as many ─ as the top.",
 		"- Lines: ─ and │, dashed ┄ and ┆ for async or events. Arrowheads ▶ ◀ ▼ ▲ touch what they point at.",
 		"- Where a line leaves a border or joins another line, draw the junction (├ ┤ ┬ ┴ ┼), e.g. ╰──┬──╯ above a line down.",
 		"- Every corner and junction arm must reach a line. No gaps between a line and its arrowhead.",

@@ -174,6 +174,12 @@ describe("DIAGRAM_GUIDE", () => {
 		assert.ok(DIAGRAM_GUIDE.includes(GUIDE_EXAMPLE));
 	});
 
+	it("says bash cannot count columns, and to build every row of a box from one template", () => {
+		assert.match(DIAGRAM_GUIDE, /Bash cannot count columns for you/);
+		assert.match(DIAGRAM_GUIDE, /Build every row of a box from one template/);
+		assert.match(DIAGRAM_GUIDE, /one corner style per box/);
+	});
+
 	it("follows the width it is given", () => {
 		assert.match(diagramGuide(72), /At most 72 columns/);
 	});
