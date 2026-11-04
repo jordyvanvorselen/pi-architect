@@ -5,7 +5,7 @@ import { describe, it } from "node:test";
 import { visibleWidth, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, WIDGET_KEY } from "../src/index.ts";
 import { event, type EventInput } from "../src/state/events.ts";
-import { newArchitecture } from "../src/state/reducer.ts";
+import { newArchitecture, rebuild } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
 import {
 	BOARD_SHORTCUT,
@@ -919,6 +919,86 @@ describe("/architect board and ctrl+alt+b", () => {
 });
 
 describe("the board over a review screen or decision card", () => {
+	const decide = (h: ReturnType<typeof harness>) =>
+		h.call("architect_decide", {
+			question: "Where do events get deduplicated?",
+			options: [
+				{ title: "In processor", pros: ["one owner"], cons: ["state"], effort: 2, risk: 1 },
+				{ title: "In backend", pros: ["DB context"], cons: ["later"], effort: 3, risk: 2 },
+			],
+			recommended: "A",
+			reason: "One owner.",
+		});
+	const deciding = () => [
+		...framed(),
+		entry({ type: "verdict", phase: "frame", verdict: "approved", at: 2 }),
+		entry({ type: "verdict", phase: "explore", verdict: "approved", at: 3 }),
+	];
+
+	it("closes the board when a decision card opens, so the card is never hidden, and keeps its comments", async () => {
+		const ui = new FakeUi();
+		const h = harness({ ui, branch: deciding() });
+		await h.fire("session_start", { reason: "resume" });
+		let result: Awaited<ReturnType<typeof decide>> | undefined;
+		ui.keys(
+			// The board, with one comment saved and one still in the editor, when the agent asks.
+			[
+				"1",
+				"c",
+				...type("saved"),
+				KEYS.enter,
+				KEYS.down,
+				"c",
+				...type("typing"),
+				async () => (result = await decide(h)),
+			],
+			[KEYS.enter],
+		);
+		await h.shortcuts[BOARD_SHORTCUT]!(h.ctx);
+		const [board, card] = ui.customs;
+		assert.equal((board!.options as { overlay?: boolean }).overlay, true);
+		assert.equal((card!.options as { overlay?: boolean } | undefined)?.overlay, undefined, "the card is inline");
+		assert.equal((result!.details as { chosen?: string }).chosen, "A");
+		assert.deepEqual(h.userMessages, [], "nothing was sent");
+		assert.equal(
+			ui.notifications.at(-1)!.message,
+			"The board closed so you can answer the agent. Your 2 comments are kept for when you open it again.",
+		);
+		// The next board starts with the draft, and sends it.
+		ui.keys([KEYS.escape, KEYS.enter]);
+		await h.shortcuts[BOARD_SHORTCUT]!(h.ctx);
+		assert.match(ui.customs[2]!.frames[0]!.join("\n"), /✎ 2 to send/);
+		const sent = h.userMessages as { content: unknown }[];
+		assert.equal(sent.length, 1);
+		assert.match(String(sent[0]!.content), /: saved\n- .*: typing$/);
+	});
+
+	it("closes the board for a review screen the same way", async () => {
+		const ui = new FakeUi();
+		const h = harness({ ui, branch: framed() });
+		await h.fire("session_start", { reason: "resume" });
+		ui.keys(["c", ...type("note"), KEYS.enter, () => h.call("architect_advance", {})], [KEYS.enter]);
+		await h.command("architect", "board");
+		assert.equal(ui.customs.length, 2);
+		assert.equal(rebuild(h.branch).architecture!.phase, "explore");
+		assert.deepEqual(h.userMessages, []);
+		ui.keys([KEYS.escape, "d"]);
+		await h.command("architect", "board");
+		assert.match(ui.customs[2]!.frames[0]!.join("\n"), /✎ 1 to send/);
+	});
+
+	it("does not open a board that was still loading when a card opened", async () => {
+		const ui = new FakeUi();
+		const h = harness({ ui, branch: deciding() });
+		await h.fire("session_start", { reason: "resume" });
+		// ctrl+alt+b, then the agent's card opens before the board is loaded; the board finishes loading
+		// while the card is open.
+		ui.keys([() => board, KEYS.enter]);
+		const board = Promise.resolve(h.shortcuts[BOARD_SHORTCUT]!(h.ctx));
+		await decide(h);
+		assert.equal(ui.customs.length, 1, "only the card opened");
+	});
+
 	const entry = (input: EventInput): BranchEntry => ({ type: "custom", customType: ENTRY_TYPE, data: event(input) });
 	const framed = () => [
 		entry({ type: "mode", mode: "architect", at: 1 }),

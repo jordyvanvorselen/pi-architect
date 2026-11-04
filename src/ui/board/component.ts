@@ -60,7 +60,9 @@ export interface BoardOptions {
 	tab?: BoardTab;
 	/** No comments, also in architect mode. For a board opened over a review screen or decision card. */
 	readOnly?: boolean;
-	/** Called once, with the comments to send. Empty when there are none. */
+	/** Comments to start with: the draft of a board that closed for a decision card or review screen. */
+	comments?: readonly BoardComment[];
+	/** Called once, with the comments to send. Empty when there are none, or when the board was suspended. */
 	done: (comments: BoardComment[]) => void;
 }
 
@@ -134,6 +136,7 @@ export class BoardScreen implements Component, Focusable {
 		this.options = options;
 		this.data = options.data();
 		this.tab = options.tab ?? this.defaultTab();
+		for (const comment of options.comments ?? []) this.comments.set(comment.key, comment);
 	}
 
 	get focused(): boolean {
@@ -221,6 +224,19 @@ export class BoardScreen implements Component, Focusable {
 			this.confirming = true;
 			this.changed();
 		} else this.finish([]);
+	}
+
+	/**
+	 * Close the board without sending anything, e.g. because a decision card or review screen opens and must
+	 * not open behind it. Returns the unsent comments, with a comment still in the editor, to keep as a draft.
+	 */
+	suspend(): BoardComment[] {
+		if (this.closed) return [];
+		const editor = this.editor;
+		if (editor && editor.editor.text.trim()) this.saveComment(editor.item, editor.editor.text);
+		const comments = this.readOnly ? [] : [...this.comments.values()];
+		this.finish([]);
+		return comments;
 	}
 
 	private finish(comments: BoardComment[]): void {

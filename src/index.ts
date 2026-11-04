@@ -88,7 +88,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	};
 	// Remembers a review closed without a verdict, so `/architect review` can open it again.
 	const reviews = new Reviews();
-	const review = reviews.wrap(overrides.review ?? createPhaseReview({}, screens));
+	// A card or review screen that opens closes the board first, so it never opens unseen behind it.
+	const reviewUi = overrides.review ?? createPhaseReview({}, screens);
+	const review = reviews.wrap((request, ctx) => boards.screen(ctx, () => reviewUi(request, ctx)));
+	const decideUi = overrides.decide ?? createDecisionCard(screens);
 	let state: ArchitectState = INITIAL_STATE;
 	let ctxRef: ExtensionContext | undefined;
 	let tui: TUI | undefined;
@@ -286,7 +289,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	 */
 	async function showBoard(ctx: ExtensionContext, { readOnly = false } = {}): Promise<void> {
 		ctxRef = ctx;
-		await boards.show(async (hooks) => {
+		await boards.show(readOnly, async (hooks) => {
 			await syncProgress(ctx);
 			const plan = state.plan;
 			const planText = plan ? await readPlan(planFile(ctx.cwd, plan.path)) : undefined;
@@ -323,7 +326,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	const gate = { ...tools, review, now, finalize: writePlanFile, planTarget };
 	registerAdvanceTool(pi, gate);
 	registerDiagramTool(pi, tools);
-	registerDecideTool(pi, { ...tools, ui: overrides.decide ?? createDecisionCard(screens) });
+	registerDecideTool(pi, { ...tools, ui: boards.guard(decideUi) });
 	registerSliceTool(pi, tools);
 
 	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, options, theme) => {

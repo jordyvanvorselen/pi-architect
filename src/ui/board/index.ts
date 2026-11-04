@@ -26,6 +26,10 @@ export interface OpenBoardOptions {
 	tab?: BoardTab;
 	/** No comments, also in architect mode. For a board opened over a review screen or decision card. */
 	readOnly?: boolean;
+	/** Comments to start with, e.g. the draft of a board that closed for a decision card. */
+	comments?: readonly BoardComment[];
+	/** Asked right before the board shows. False leaves it closed, e.g. when a decision card opened meanwhile. */
+	shouldOpen?: () => boolean;
 	/** Called with the open board, and with undefined when it closes, so the caller can push updates. */
 	onOpen?: (board: BoardScreen | undefined) => void;
 }
@@ -77,6 +81,7 @@ export async function openBoard(ctx: ExtensionContext, options: OpenBoardOptions
 		return undefined;
 	}
 	const markdown = options.markdown ?? (await loadMarkdownTheme());
+	if (options.shouldOpen && !options.shouldOpen()) return undefined;
 	let size = { columns: 80, rows: 24 };
 	let comments: BoardComment[];
 	try {
@@ -89,6 +94,7 @@ export async function openBoard(ctx: ExtensionContext, options: OpenBoardOptions
 					markdown: markdown ?? paintMarkdownTheme(paint),
 					...(options.tab ? { tab: options.tab } : {}),
 					...(options.readOnly ? { readOnly: true } : {}),
+					...(options.comments?.length ? { comments: options.comments } : {}),
 					done,
 				});
 				options.onOpen?.(board);
