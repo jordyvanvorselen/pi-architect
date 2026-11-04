@@ -1,6 +1,6 @@
 import type { Decision } from "../../state/types.ts";
 import { lineWidth, sp, wrap, wrapAfter, type Line } from "../spans.ts";
-import { risks, section, trim, type ReviewBody } from "./common.ts";
+import { section, trim, type ReviewBody } from "./common.ts";
 
 /** One decision: the question, the chosen option with the comment, and the rejected options dimmed. */
 export function decisionLines(decision: Decision, width: number): Line[] {
@@ -49,5 +49,5 @@ export const decideBody: ReviewBody = (arch, width) => {
 	const body = arch.decisions.length
 		? arch.decisions.flatMap((d, i) => [...(i ? [[]] : []), ...decisionLines(d, width)])
 		: [[sp("No open questions. The design follows from the brief.", "muted")]];
-	return trim([...section("Decisions", body, width, arch.decisions.length ? right : []), ...risks(arch, width)]);
+	return trim(section("Decisions", body, width, arch.decisions.length ? right : []));
 };
