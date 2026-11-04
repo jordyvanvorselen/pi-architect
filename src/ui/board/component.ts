@@ -115,6 +115,8 @@ export class BoardScreen implements Component, Focusable {
 	private readonly scrolls = new Map<BoardTab, number>();
 	private readonly expanded = new Set<string>();
 	private readonly comments = new Map<string, BoardComment>();
+	/** What the user typed per item and left with esc, back when they press `c` on it again. */
+	private readonly unsaved = new Map<string, string>();
 	private detail: { key: string; view: DiagramView; scroll: number } | undefined;
 	private editor: { item: BoardItem; editor: InlineEditor; existing: boolean } | undefined;
 	/** Scroll the selected item into view on the next layout. */
@@ -421,11 +423,11 @@ export class BoardScreen implements Component, Focusable {
 					[
 						["↵", this.editor.existing ? "save · empty removes" : "save"],
 						["shift+↵", "new line"],
-						["esc", "cancel"],
+						["esc", "back"],
 					],
 					[
 						["↵", "save"],
-						["esc", "cancel"],
+						["esc", "back"],
 					],
 				],
 				inner,
@@ -715,7 +717,8 @@ export class BoardScreen implements Component, Focusable {
 		const item = this.selectedItem();
 		if (!item || this.readOnly) return;
 		const existing = this.comments.get(item.key);
-		const editor = new InlineEditor(this.tui, this.paint, existing?.text ?? "", (text) => this.saveComment(item, text));
+		const text = this.unsaved.get(item.key) ?? existing?.text ?? "";
+		const editor = new InlineEditor(this.tui, this.paint, text, (value) => this.saveComment(item, value));
 		editor.focused = this.hasFocus;
 		this.editor = { item, editor, existing: existing !== undefined };
 		this.changed();
@@ -723,6 +726,7 @@ export class BoardScreen implements Component, Focusable {
 
 	private saveComment(item: BoardItem, text: string): void {
 		const comment = text.trim();
+		this.unsaved.delete(item.key);
 		if (comment)
 			this.comments.set(item.key, {
 				tab: this.tab,
@@ -773,6 +777,9 @@ export class BoardScreen implements Component, Focusable {
 		const editor = this.editor;
 		if (editor) {
 			if (matchesKey(data, Key.escape)) {
+				// Back to the board. The text waits for the next `c` on this item, unsaved.
+				if (editor.editor.text.trim()) this.unsaved.set(editor.item.key, editor.editor.text);
+				else this.unsaved.delete(editor.item.key);
 				this.editor = undefined;
 				this.changed();
 			} else {
