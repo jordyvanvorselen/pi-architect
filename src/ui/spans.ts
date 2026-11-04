@@ -66,19 +66,60 @@ export const paintLine = (line: Line, paint: Paint): string => line.map((s) => p
 
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 
-/** Break one word that is wider than `max` into pieces that fit. */
+/** Break one word that is wider than `max` into pieces that fit, after a `/` where there is one. */
 function breakWord(word: string, max: number): string[] {
 	const pieces: string[] = [];
 	let piece = "";
 	for (const { segment } of segmenter.segment(word)) {
 		if (piece && visibleWidth(piece + segment) > max) {
-			pieces.push(piece);
-			piece = "";
+			const slash = piece.lastIndexOf("/") + 1;
+			if (slash > 0 && slash < piece.length) {
+				pieces.push(piece.slice(0, slash));
+				piece = piece.slice(slash);
+			} else {
+				pieces.push(piece);
+				piece = "";
+			}
 		}
 		piece += segment;
 	}
 	if (piece) pieces.push(piece);
 	return pieces;
+}
+
+/** `text` cut to `max` columns in the middle, with `…`, so both ends of a path stay readable. */
+export function middleTruncate(text: string, max: number): string {
+	if (visibleWidth(text) <= max) return text;
+	if (max <= 1) return "…".slice(0, Math.max(0, max));
+	const chars = [...segmenter.segment(text)].map((s) => s.segment);
+	const keep = max - 1;
+	const head = Math.ceil(keep / 2);
+	return `${chars.slice(0, head).join("")}…${chars.slice(chars.length - (keep - head)).join("")}`;
+}
+
+/**
+ * `prefix` then a file path, on one line when it fits. Otherwise the path goes on its own lines, indented
+ * by `indent`, broken after a `/`; a single part that is too long is cut in the middle with `…`.
+ */
+export function pathAfter(prefix: Line, path: string, total: number, color?: Color, indent = 2): Line[] {
+	if (lineWidth(prefix) + visibleWidth(path) <= total) return [[...prefix, sp(path, color)]];
+	const room = Math.max(1, total - indent);
+	const pad = sp(" ".repeat(Math.min(indent, total - 1)));
+	const lines: Line[] = [clipLine(prefix, total)];
+	let line = "";
+	for (const part of path.split(/(?<=\/)/)) {
+		if (line && visibleWidth(line + part) > room) {
+			lines.push([pad, sp(line, color)]);
+			line = "";
+		}
+		line += part;
+		if (visibleWidth(line) > room) {
+			lines.push([pad, sp(middleTruncate(line, room), color)]);
+			line = "";
+		}
+	}
+	if (line) lines.push([pad, sp(line, color)]);
+	return lines;
 }
 
 /** Word-wrap plain text to `max` columns. Keeps line breaks; breaks words that do not fit on their own. */

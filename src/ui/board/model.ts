@@ -10,7 +10,7 @@ import type { Color, Paint } from "../paint.ts";
 import { bullets, heading, paragraph, SEVERITY_COLOR } from "../review/common.ts";
 import { decisionLines } from "../review/decide.ts";
 import { legend, moduleMap } from "../review/explore.ts";
-import { clipLine, lineWidth, raw, sp, wrap, wrapAfter, type Line, type Span } from "../spans.ts";
+import { clipLine, lineWidth, pathAfter, raw, sp, wrap, wrapAfter, type Line, type Span } from "../spans.ts";
 
 /** The board's tabs, in order. Keys 1–7 open them. */
 export const TABS = ["brief", "explore", "decisions", "diagrams", "risks", "slices", "plan"] as const;
@@ -517,7 +517,7 @@ function planContent(data: BoardData, draft: () => string, env: BoardEnv): TabCo
 	const approved = data.arch?.approvedAt !== undefined;
 	const header = (w: number): Line[] => {
 		if (file !== undefined && data.plan)
-			return wrapAfter(
+			return pathAfter(
 				[sp("▣ ", "success"), sp(approved || !data.arch ? "Approved plan  " : "Plan file  ", "text", true)],
 				data.plan.path,
 				w,
@@ -526,7 +526,7 @@ function planContent(data: BoardData, draft: () => string, env: BoardEnv): TabCo
 		const target = data.planTarget;
 		return [
 			[sp("▢ ", "warning"), sp("Draft", "warning", true), sp("  not written yet", "dim")],
-			...(target ? wrapAfter([sp("  Approving the Blueprint writes ", "muted")], target, w, "accent") : []),
+			...(target ? pathAfter([sp("  Approving the Blueprint writes ", "muted")], target, w, "accent", 4) : []),
 		];
 	};
 	return {
