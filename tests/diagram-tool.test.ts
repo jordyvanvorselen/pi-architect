@@ -33,7 +33,7 @@ describe("planDiagram", () => {
 		});
 		assert.match(
 			plan.text,
-			/^Saved diagram d1 "Flow" \(3 lines, 9 cols\)\. The user sees it on screen\. Explore still needs at least one touched or new module\.$/,
+			/^Saved diagram d1 "Flow" \(3 lines, 9 cols\)\. The user sees it on screen\.\nExplore still needs at least one touched or new module\.$/,
 		);
 		const details = plan.details as Extract<DiagramDetails, { outcome: "saved" }>;
 		assert.deepEqual([details.outcome, details.replaced, details.lines, details.cols], ["saved", false, 3, 9]);
@@ -59,7 +59,7 @@ describe("planDiagram", () => {
 			after.diagrams.map((d) => d.title),
 			["Now, revised"],
 		);
-		assert.match(planDiagram(arch, { id: "d1", title: "x", body: BROKEN }).text, /Keep id "d1" to replace it\./);
+		assert.match(planDiagram(arch, { id: "d1", title: "x", body: BROKEN }).text, /\.\nKeep id "d1" to replace it\.$/);
 	});
 
 	it("tells the model which ids exist when the id is unknown", () => {
@@ -83,10 +83,13 @@ describe("planDiagram", () => {
 		assert.match(plan.text, /Design is ready: call architect_advance/);
 	});
 
-	it("passes warnings on without rejecting", () => {
+	it("passes warnings on without rejecting, each on its own line", () => {
 		const plan = planDiagram(at(), { title: "t", body: `${BOX}\n    │\n    ▼\n\n╭───────╮\n│ Proc  │\n╰───────╯` });
 		assert.ok(plan.event);
-		assert.match(plan.text, /Warnings, fix them if you revise it: - line 5 col 5 warning: ▼ stops 1 row short/);
+		assert.match(
+			plan.text,
+			/\.\nWarnings, fix them if you revise it:\n- line 5 col 5 warning: ▼ stops 1 row short[^\n]*\nExplore still needs/,
+		);
 		assert.equal(plan.details.outcome === "saved" && plan.details.warnings.length, 1);
 	});
 
@@ -95,7 +98,7 @@ describe("planDiagram", () => {
 		assert.equal(plan.event!.diagram.body, "╭───────╮\n│ Panel │\n╰───────╯");
 		assert.match(
 			plan.text,
-			/The user sees it on screen\. Repaired 1 alignment slip before showing it\. Keep these when you revise it:\n- line 3 col 8: moved ╯ from col 8 to col 9, in line with the corner on line 1\./,
+			/The user sees it on screen\.\nRepaired 1 alignment slip before showing it\. Keep these when you revise it:\n- line 3 col 8: moved ╯ from col 8 to col 9, in line with the corner on line 1\./,
 		);
 		assert.equal(plan.details.outcome === "saved" && plan.details.repairs.length, 1);
 	});

@@ -132,12 +132,10 @@ export function planDiagram(
 		const examples = kinds
 			.filter((k) => (options.rejections?.count(k) ?? 0) >= EXAMPLE_AFTER)
 			.map((k) => `- ${PASSING[k]}`);
-		const again = examples.length ? ["The same problem came back. What passes:", ...examples].join("\n") : "";
+		const again = examples.length ? ["The same problem came back. What passes:", ...examples] : [];
 		return {
 			event: undefined,
-			text: [`${check.summary}${old ? ` Keep id "${old.id}" to replace it.` : ""}`, ...(again ? [again] : [])].join(
-				"\n",
-			),
+			text: [check.summary, ...(old ? [`Keep id "${old.id}" to replace it.`] : []), ...again].join("\n"),
 			details: {
 				outcome: "rejected",
 				phase,
@@ -168,13 +166,16 @@ export function planDiagram(
 	const next = readiness(phase, gaps);
 	const warned = check.findings.filter((f) => f.severity === "warning");
 	const warnings = warned.length
-		? ` Warnings, fix them if you revise it: ${warned.map((f) => `- line ${f.line} col ${f.col} warning: ${f.message}`).join("\n")}`
-		: "";
-	const repaired = check.repairs.length ? ` ${repairLines(check.repairs, true).join("\n")}` : "";
+		? [
+				"Warnings, fix them if you revise it:",
+				...warned.map((f) => `- line ${f.line} col ${f.col} warning: ${f.message}`),
+			]
+		: [];
 	const verb = old ? `Replaced diagram ${diagram.id}` : `Saved diagram ${diagram.id}`;
+	const saved = `${verb} "${diagram.title}" (${bodyLines.length} lines, ${cols} cols). The user sees it on screen.`;
 	return {
 		event: { type: "diagram", diagram },
-		text: `${verb} "${diagram.title}" (${bodyLines.length} lines, ${cols} cols). The user sees it on screen.${repaired}${warnings} ${next}`,
+		text: [saved, ...repairLines(check.repairs, true), ...warnings, next].join("\n"),
 		details: {
 			outcome: "saved",
 			phase,
