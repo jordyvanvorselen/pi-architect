@@ -243,6 +243,8 @@ The tools are only active in architect mode, so build mode does not pay for them
 ## User commands
 
 Every command lives under `/architect`. The first words `build`, `board`, `review`, `plan` and `reset` are reserved. Anything else names a feature.
+A first word that starts with a reserved word but is not one, like `board6cSplit` typed after autocomplete or `Builder`, asks "Did you mean `/architect board`?" with the command first.
+Quotes name a feature as written: `/architect "Build pipeline"`. Questions that discard work, like reset or a new feature over an old one, start on No.
 
 | Command                 | Does                                                                                                    |
 | ----------------------- | ------------------------------------------------------------------------------------------------------- |

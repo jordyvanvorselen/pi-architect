@@ -1,5 +1,7 @@
 import type { ExtensionAPI, ExtensionCommandContext, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Text, type AutocompleteItem, type TUI } from "@earendil-works/pi-tui";
+import { parseArchitectArgs } from "./args.ts";
+import { confirmDiscard } from "./confirm.ts";
 import { planCommand, PLAN_SUBCOMMANDS } from "./plan/command.ts";
 import { buildSection } from "./plan/handoff.ts";
 import { buildOrder } from "./plan/order.ts";
@@ -381,8 +383,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			return;
 		}
 		const name = arch.feature ? ` for "${arch.feature}"` : "";
-		if (ctx.hasUI && !(await ctx.ui.confirm("Discard the architecture?", `This discards the architecture${name}.`)))
-			return;
+		const message = `This discards the architecture${name}.`;
+		if (ctx.hasUI && !(await confirmDiscard(ctx, "Discard the architecture?", message, "Yes, discard it"))) return;
 		append({ type: "reset", at: now() });
 	}
 
@@ -395,9 +397,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 				ctx.ui.notify(`Already architecting "${arch.feature || "a feature"}". Run /architect reset first.`, "error");
 				return;
 			}
-			const ok = await ctx.ui.confirm(
+			const ok = await confirmDiscard(
+				ctx,
 				`Architect "${feature}"?`,
 				`This discards the architecture${arch.feature ? ` for "${arch.feature}"` : ""}.`,
+				`Yes, discard it and architect "${feature}"`,
 			);
 			if (!ok) return;
 		}
@@ -464,7 +468,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	async function run(sub: Subcommand, rest: string, ctx: ExtensionCommandContext): Promise<void> {
 		if (sub === "plan") return plan(rest, ctx);
 		if (rest) {
-			ctx.ui.notify(`/architect ${sub} takes no arguments. A feature name cannot start with "${sub}".`, "error");
+			ctx.ui.notify(
+				`/architect ${sub} takes no arguments. For a feature that starts with "${sub}", put it in quotes: /architect "${sub} ${rest}".`,
+				"error",
+			);
 			return;
 		}
 		if (sub === "board") await showBoard(ctx);
@@ -474,6 +481,25 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			);
 		else if (sub === "build") await setMode("build", ctx);
 		else await reset(ctx);
+	}
+
+	/**
+	 * A first word that starts with a subcommand, like `board6cSplit…` after autocomplete. Ask which one was
+	 * meant, with the subcommand first: starting a feature by accident costs more than opening the board.
+	 */
+	async function suspect(sub: Subcommand, name: string, ctx: ExtensionCommandContext): Promise<void> {
+		const feature = `Architect "${name}" as a feature`;
+		if (!ctx.hasUI) {
+			ctx.ui.notify(
+				`Did you mean /architect ${sub}? For a feature that starts with "${sub}", put it in quotes: /architect "${name}".`,
+				"error",
+			);
+			return;
+		}
+		const meant = `Yes, /architect ${sub}`;
+		const picked = await ctx.ui.select(`Did you mean /architect ${sub}?`, [meant, feature]);
+		if (picked === meant) await run(sub, "", ctx);
+		else if (picked === feature) await begin(name, ctx);
 	}
 
 	pi.registerCommand("architect", {
@@ -497,11 +523,13 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		},
 		handler: async (args, ctx) => {
 			ctxRef = ctx;
-			const text = args.trim();
-			const [first = "", ...words] = text.split(/\s+/);
-			const sub = SUBCOMMANDS.find((s) => s.value === first.toLowerCase())?.value;
-			if (sub) return run(sub, words.join(" "), ctx);
-			if (text) return begin(text, ctx);
+			const parsed = parseArchitectArgs(
+				args,
+				SUBCOMMANDS.map((s) => s.value),
+			);
+			if (parsed.kind === "subcommand") return run(parsed.sub, parsed.rest, ctx);
+			if (parsed.kind === "feature") return begin(parsed.name, ctx);
+			if (parsed.kind === "suspect") return suspect(parsed.sub, parsed.name, ctx);
 			if (state.mode !== "architect" || !ctx.hasUI) {
 				await setMode("architect", ctx);
 				return;

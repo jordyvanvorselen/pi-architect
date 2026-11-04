@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { ENTRY_TYPE, FLAG, SHORTCUT, WIDGET_KEY } from "../src/index.ts";
+import { KEEP } from "../src/confirm.ts";
 import { MODE_MESSAGE, SECTION } from "../src/prompt.ts";
 import { REVIEW_MESSAGE } from "../src/reopen.ts";
 import { rebuild } from "../src/state/reducer.ts";
@@ -148,7 +149,7 @@ describe("modes", () => {
 	});
 
 	it("/architect in architect mode offers the board, the plan, build mode and reset", async () => {
-		const ui = new FakeUi({ confirm: [true] });
+		const ui = new FakeUi();
 		const h = await architecting(ui);
 		await h.call("architect_update", { feature: "Dedupe" });
 		ui.script({ select: [undefined] });
@@ -166,7 +167,7 @@ describe("modes", () => {
 		assert.equal(rebuild(h.branch).mode, "build");
 		await h.command("architect");
 		assert.equal(rebuild(h.branch).mode, "architect");
-		ui.script({ select: ["Discard the architecture"], confirm: [true] });
+		ui.script({ select: ["Discard the architecture", "Yes, discard it"] });
 		await h.command("architect");
 		assert.deepEqual(events(h), ["mode", "update", "mode", "mode", "reset"]);
 	});
@@ -181,14 +182,49 @@ describe("modes", () => {
 		assert.deepEqual(
 			ui.notifications.map((n) => [n.message, n.type]),
 			[
-				['/architect build takes no arguments. A feature name cannot start with "build".', "error"],
-				['/architect reset takes no arguments. A feature name cannot start with "reset".', "error"],
+				[
+					'/architect build takes no arguments. For a feature that starts with "build", put it in quotes: /architect "build pipeline".',
+					"error",
+				],
+				[
+					'/architect reset takes no arguments. For a feature that starts with "reset", put it in quotes: /architect "reset now".',
+					"error",
+				],
 				["Already in build mode.", "info"],
 			],
 		);
 		assert.deepEqual(h.entries, []);
+		await h.command("architect", '"build pipeline"');
+		assert.equal(rebuild(h.branch).architecture!.feature, "build pipeline");
+	});
+
+	it("asks whether a first word glued to a subcommand meant the subcommand, with the subcommand first", async () => {
+		const ui = new FakeUi({ select: [undefined] });
+		const h = harness({ ui });
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect", "board6cSplit the panel");
+		assert.equal(ui.prompts[0]!.title, "Did you mean /architect board?");
+		assert.deepEqual(ui.prompts[0]!.detail, [
+			"Yes, /architect board",
+			'Architect "board6cSplit the panel" as a feature',
+		]);
+		assert.deepEqual(h.entries, []);
+		ui.script({ select: ['Architect "Builder cleanup" as a feature'] });
 		await h.command("architect", "Builder cleanup");
 		assert.equal(rebuild(h.branch).architecture!.feature, "Builder cleanup");
+	});
+
+	it("headless, a first word glued to a subcommand starts nothing and says how to name such a feature", async () => {
+		const notes: string[] = [];
+		const h = harness();
+		(h.ctx.ui as { notify: (m: string) => void }).notify = (m) => notes.push(m);
+		await h.fire("session_start", { reason: "startup" });
+		await h.command("architect", "Planner");
+		assert.deepEqual(notes, [
+			'Did you mean /architect plan? For a feature that starts with "plan", put it in quotes: /architect "Planner".',
+		]);
+		assert.deepEqual(h.entries, []);
+		assert.equal(h.sent.length, 0);
 	});
 
 	it("headless /architect in architect mode says so instead of a picker", async () => {
@@ -356,7 +392,7 @@ describe("/architect", () => {
 	});
 
 	it("asks before replacing an architecture with content, and resumes the same feature without asking", async () => {
-		const ui = new FakeUi({ confirm: [false, true] });
+		const ui = new FakeUi({ select: [undefined, 'Yes, discard it and architect "Other"'] });
 		const h = harness({ ui });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect", "Dedupe");
@@ -367,7 +403,9 @@ describe("/architect", () => {
 		assert.equal(rebuild(h.branch).architecture!.feature, "Dedupe");
 		await h.command("architect", "Other");
 		assert.equal(rebuild(h.branch).architecture!.feature, "Other");
-		assert.equal(ui.prompts[1]!.detail, 'This discards the architecture for "Dedupe".');
+		assert.equal(ui.prompts[1]!.title, 'Architect "Other"?\nThis discards the architecture for "Dedupe".');
+		// No is first, so a stray ↵ keeps the architecture.
+		assert.deepEqual(ui.prompts[1]!.detail, [KEEP, 'Yes, discard it and architect "Other"']);
 	});
 
 	it("refuses to replace an architecture without a UI to confirm", async () => {
@@ -381,8 +419,8 @@ describe("/architect", () => {
 		assert.deepEqual(notes, ['Already architecting "Dedupe". Run /architect reset first.']);
 	});
 
-	it("reset discards the architecture after a confirmation", async () => {
-		const ui = new FakeUi({ confirm: [false, true] });
+	it("reset discards the architecture after a confirmation that starts on No", async () => {
+		const ui = new FakeUi({ select: [KEEP, "Yes, discard it"] });
 		const h = harness({ ui });
 		await h.fire("session_start", { reason: "startup" });
 		await h.command("architect", "reset");
@@ -392,7 +430,8 @@ describe("/architect", () => {
 		assert.equal(rebuild(h.branch).architecture!.feature, "Dedupe");
 		await h.command("architect", "reset");
 		assert.equal(rebuild(h.branch).architecture!.feature, "");
-		assert.equal(ui.prompts[1]!.detail, 'This discards the architecture for "Dedupe".');
+		assert.equal(ui.prompts[1]!.title, 'Discard the architecture?\nThis discards the architecture for "Dedupe".');
+		assert.deepEqual(ui.prompts[1]!.detail, [KEEP, "Yes, discard it"]);
 	});
 });
 
