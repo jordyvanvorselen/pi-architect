@@ -77,6 +77,11 @@ export function harness(
 		flags?: Record<string, boolean>;
 		/** Tools Pi has besides the extension's own. */
 		builtins?: string[];
+		/**
+		 * The tool set Pi starts with, like the one it restores from the transcript after a reload, a resume
+		 * or /tree. Default: the builtins plus the extension's tools that are active by default.
+		 */
+		activeTools?: string[];
 		/** The session's cwd. Default: a fresh temp directory, so a written plan never lands in a real project. */
 		cwd?: string;
 		/** Exit code of every `pi.exec` call. */
@@ -159,6 +164,7 @@ export function harness(
 
 	// No input grace by default, so scripted keys land at once. Tests of the grace period pass their own.
 	ext(pi as never, { now: () => ++clock, inputGrace: 0, ...options.overrides });
+	if (options.activeTools) active = [...options.activeTools];
 
 	const fire = async (event: string, payload: object = {}) => {
 		let result: unknown;

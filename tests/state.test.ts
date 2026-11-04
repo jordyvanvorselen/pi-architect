@@ -53,6 +53,18 @@ describe("mode", () => {
 		assert.equal(arch(state).feature, "Dedupe panel events");
 		assert.equal(arch(state).startedAt, 1);
 	});
+
+	it("remembers the write tools the user had off when entering architect mode, until the next entry", () => {
+		const first = replay({ type: "mode", mode: "architect", at: 1, keptOff: ["write"] });
+		assert.deepEqual(first.keptOff, ["write"]);
+		const back = reduce(first, event({ type: "mode", mode: "build", at: 2 }));
+		assert.deepEqual(back.keptOff, ["write"]);
+		const again = reduce(back, event({ type: "mode", mode: "architect", at: 3, keptOff: [] }));
+		assert.deepEqual(again.keptOff, []);
+		// Events from before keptOff existed: nothing was known to be off.
+		assert.deepEqual(replay({ type: "mode", mode: "architect", at: 1 }).keptOff, []);
+		assert.equal(rebuild([]).keptOff, undefined);
+	});
 });
 
 describe("begin and reset", () => {

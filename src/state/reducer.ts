@@ -117,10 +117,18 @@ function reduceArchitecture(arch: Architecture, event: ArchitectEvent): Architec
  */
 export function reduce(state: ArchitectState, event: ArchitectEvent): ArchitectState {
 	switch (event.type) {
-		case "mode":
-			if (event.mode === "architect" && !state.architecture)
-				return { mode: "architect", architecture: newArchitecture(event.at) };
-			return { ...state, mode: event.mode };
+		case "mode": {
+			if (event.mode === "build") return { ...state, mode: "build" };
+			const keptOff = Array.isArray(event.keptOff)
+				? event.keptOff.filter((t) => typeof t === "string")
+				: (state.keptOff ?? []);
+			return {
+				...state,
+				mode: "architect",
+				architecture: state.architecture ?? newArchitecture(event.at),
+				keptOff,
+			};
+		}
 		case "begin":
 			return { mode: state.mode, architecture: newArchitecture(event.at, event.feature, event.slug) };
 		case "reset":
