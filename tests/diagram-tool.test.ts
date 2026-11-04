@@ -7,6 +7,7 @@ import { ENTRY_TYPE, event } from "../src/state/events.ts";
 import { PHASES, type Phase } from "../src/state/phases.ts";
 import { newArchitecture, reduce } from "../src/state/reducer.ts";
 import type { Architecture } from "../src/state/types.ts";
+import { Rejections } from "../src/tools/common.ts";
 import { type DiagramDetails, planDiagram, prepareDiagramArgs } from "../src/tools/diagram.ts";
 import { diagramCall, diagramResult } from "../src/ui/diagram.ts";
 import { harness } from "./harness.ts";
@@ -97,6 +98,15 @@ describe("planDiagram", () => {
 			/The user sees it on screen\. Repaired 1 alignment slip before showing it\. Keep these when you revise it:\n- line 3 col 8: moved ╯ from col 8 to col 9, in line with the corner on line 1\./,
 		);
 		assert.equal(plan.details.outcome === "saved" && plan.details.repairs.length, 1);
+	});
+
+	it("shows what passes once the same kind of error is rejected twice in a row", () => {
+		const rejections = new Rejections();
+		const send = (body: string) => planDiagram(at(), { title: "t", body }, { rejections }).text;
+		assert.doesNotMatch(send(BROKEN), /What passes/);
+		assert.match(send(BROKEN), /The same problem came back\. What passes:\n- A box passes when its top/);
+		assert.doesNotMatch(send(BOX), /What passes/);
+		assert.doesNotMatch(send(BROKEN), /What passes/);
 	});
 
 	it("checks the width it is given", () => {

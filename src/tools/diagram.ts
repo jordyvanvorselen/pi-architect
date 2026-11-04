@@ -16,7 +16,7 @@ import { PHASE_LABEL, phaseIndex, type Phase } from "../state/phases.ts";
 import { missing, nextId } from "../state/queries.ts";
 import type { Architecture, Diagram } from "../state/types.ts";
 import { diagramCall, diagramResult } from "../ui/diagram.ts";
-import { architecture, parseJson, readiness, type ToolDeps } from "./common.ts";
+import { architecture, EXAMPLE_AFTER, parseJson, readiness, Rejections, type ToolDeps } from "./common.ts";
 
 export const DiagramParams = Type.Object(
 	{
@@ -76,6 +76,26 @@ export type DiagramDetails =
 	  }
 	| { outcome: "rejected"; phase: Phase; errors: number; warnings: number; findings: DiagramFinding[] };
 
+type FindingKind = "box" | "arm" | "arrow" | "width" | "text";
+
+/** The kind of a linter error, to notice the same mistake coming back. */
+function findingKind(f: DiagramFinding): FindingKind {
+	if (/box side|col off/.test(f.message)) return "box";
+	if (/has nothing|does not join/.test(f.message)) return "arm";
+	if (/gap between/.test(f.message)) return "arrow";
+	if (/wider than/.test(f.message)) return "width";
+	return "text";
+}
+
+/** What passes, for a kind of error the model made twice in a row. */
+const PASSING: Record<FindingKind, string> = {
+	box: "A box passes when its top, every text line and its bottom have the same width, so both sides stay in one column: ╭───────╮ / │ Panel │ / ╰───────╯. Pad short text lines with spaces up to the side.",
+	arm: "A junction passes when every arm meets a line: ╰───┬───╯ with │ right below the ┬. Use ─ or │ instead where nothing joins.",
+	arrow: "An arrow passes when it touches its line: ──────▶, with no space before the ▶.",
+	width: "A diagram passes when every line fits the width: stack boxes top to bottom, or split it into two diagrams.",
+	text: "Send plain text with spaces only: no tabs, no colour codes, and a short title.",
+};
+
 export interface DiagramPlan {
 	/** Undefined when the diagram was rejected. */
 	event: Omit<DiagramEvent, "v"> | undefined;
@@ -87,7 +107,11 @@ export interface DiagramPlan {
  * Check the diagram and turn it into a `diagram` event, or a rejection with the linter's findings. Pure.
  * Throws for calls that cannot work at all: wrong phase, unknown id, approved plan.
  */
-export function planDiagram(arch: Architecture, input: DiagramInput, options: { maxWidth?: number } = {}): DiagramPlan {
+export function planDiagram(
+	arch: Architecture,
+	input: DiagramInput,
+	options: { maxWidth?: number; rejections?: Rejections } = {},
+): DiagramPlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
 	if (!diagramsAllowed(phase))
@@ -102,10 +126,18 @@ export function planDiagram(arch: Architecture, input: DiagramInput, options: { 
 		);
 
 	const check = validateDiagram(input, { maxWidth: options.maxWidth ?? diagramMaxWidth() });
-	if (!check.ok || !check.diagram)
+	if (!check.ok || !check.diagram) {
+		const kinds = [...new Set(check.findings.filter((f) => f.severity === "error").map(findingKind))];
+		options.rejections?.record(kinds);
+		const examples = kinds
+			.filter((k) => (options.rejections?.count(k) ?? 0) >= EXAMPLE_AFTER)
+			.map((k) => `- ${PASSING[k]}`);
+		const again = examples.length ? ["The same problem came back. What passes:", ...examples].join("\n") : "";
 		return {
 			event: undefined,
-			text: `${check.summary}${old ? ` Keep id "${old.id}" to replace it.` : ""}`,
+			text: [`${check.summary}${old ? ` Keep id "${old.id}" to replace it.` : ""}`, ...(again ? [again] : [])].join(
+				"\n",
+			),
 			details: {
 				outcome: "rejected",
 				phase,
@@ -114,6 +146,8 @@ export function planDiagram(arch: Architecture, input: DiagramInput, options: { 
 				findings: check.findings,
 			},
 		};
+	}
+	options.rejections?.clear();
 
 	const diagram: Diagram = {
 		id:
@@ -157,6 +191,7 @@ export function planDiagram(arch: Architecture, input: DiagramInput, options: { 
 
 /** Register `architect_diagram`. */
 export function registerDiagramTool(pi: ExtensionAPI, deps: ToolDeps): void {
+	const rejections = new Rejections();
 	pi.registerTool({
 		name: "architect_diagram",
 		label: "Architect diagram",
@@ -173,7 +208,7 @@ export function registerDiagramTool(pi: ExtensionAPI, deps: ToolDeps): void {
 		prepareArguments: prepareDiagramArgs,
 		async execute(_toolCallId, params) {
 			const arch = architecture(deps.state(), "architect_diagram");
-			const plan = planDiagram(arch, params);
+			const plan = planDiagram(arch, params, { rejections });
 			if (!plan.event) return { content: [{ type: "text", text: plan.text }], details: plan.details, isError: true };
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };
