@@ -1,48 +1,26 @@
+import { git } from "./git.ts";
+import { options, type ArgRule, type OptionSpec } from "./options.ts";
 import { parseCommandLine, type Redirect, type SimpleCommand, type Word } from "./shell.ts";
 
-/** Checks the arguments of one command. Returns why it is not read-only, or undefined when it is. */
-type ArgRule = (args: string[]) => string | undefined;
-
+/** For commands that have no option that writes or runs something: any argument is fine, globs too. */
 const ANY: ArgRule = () => undefined;
 
-/** Flags that make the command write, run something or go interactive. Matches `--flag` and `--flag=value`. */
-function denyFlags(command: string, long: string[], short = ""): ArgRule {
-	return (args) => {
-		for (const arg of args) {
-			if (arg === "--") break;
-			if (arg.startsWith("--")) {
-				const name = arg.split("=")[0]!;
-				if (long.includes(name)) return `${command} ${name} is not read-only`;
-			} else if (short && /^-[A-Za-z]/.test(arg)) {
-				const hit = [...arg.slice(1)].find((ch) => short.includes(ch));
-				if (hit) return `${command} -${hit} is not read-only`;
-			}
-		}
-		return undefined;
-	};
+const values = (args: readonly Word[]) => args.map((a) => a.value);
+
+function noGlobs(command: string, args: readonly Word[]): string | undefined {
+	const glob = args.find((a) => a.glob);
+	return glob ? `quote "${glob.value}": ${command} does not take file name patterns` : undefined;
 }
 
-const positional = (args: string[]) => args.filter((a) => !a.startsWith("-"));
-
-function versionOnly(command: string): ArgRule {
+/** Only the exact version flags. `python -v` or `bun version` would run code. */
+function versionOnly(command: string, flags: string[]): ArgRule {
 	return (args) =>
-		args.length === 1 && ["--version", "-v", "-V", "version"].includes(args[0]!)
+		args.length === 1 && flags.includes(args[0]!.value) && !args[0]!.glob
 			? undefined
-			: `only "${command} --version" is allowed`;
+			: `only "${command} ${flags[0]}" is allowed`;
 }
 
-/** Subcommands that only read. `rules` refines individual subcommands. */
-function subcommands(command: string, allowed: string[], rules: Record<string, ArgRule> = {}): ArgRule {
-	return (args) => {
-		const sub = args[0];
-		if (sub === undefined) return `${command} needs a read-only subcommand: ${allowed.join(", ")}`;
-		if (sub === "--version" || sub === "-v" || sub === "--help" || sub === "help") return undefined;
-		if (!allowed.includes(sub)) return `${command} ${sub} is not read-only`;
-		return rules[sub]?.(args.slice(1));
-	};
-}
-
-/** sed scripts that only print or delete lines from the output: `10,20p`, `/re/p`, `s/a/b/g`, `5q`. */
+/** sed scripts that only print, delete or substitute: `10,20p`, `/re/p`, `s/a/b/g`, `5q`. No `w`, `e` or `r`. */
 function safeSedScript(script: string): boolean {
 	const address = String.raw`(?:\d+|\$|/(?:[^/\\]|\\.)*/)`;
 	const range = new RegExp(String.raw`^\s*(?:${address}(?:\s*,\s*${address})?)?\s*!?\s*[pdq=]?\s*$`);
@@ -63,285 +41,648 @@ function safeSedScript(script: string): boolean {
 	});
 }
 
-const sed: ArgRule = (args) => {
-	const scripts: string[] = [];
-	let sawScriptFlag = false;
-	const files: string[] = [];
-	for (let i = 0; i < args.length; i++) {
-		const arg = args[i]!;
-		if (arg === "-i" || arg.startsWith("--in-place") || /^-[a-zA-Z]*i/.test(arg)) return "sed -i edits files";
-		if (arg === "-f" || arg.startsWith("--file")) return "sed -f is not allowed; give the script inline";
-		if (arg === "-e" || arg === "--expression") {
-			sawScriptFlag = true;
-			scripts.push(args[++i] ?? "");
-		} else if (arg.startsWith("--expression=")) {
-			sawScriptFlag = true;
-			scripts.push(arg.slice("--expression=".length));
-		} else if (!arg.startsWith("-")) files.push(arg);
-	}
-	if (!sawScriptFlag && files.length) scripts.push(files.shift()!);
-	if (!scripts.length) return "sed needs a script";
-	return scripts.every(safeSedScript)
-		? undefined
-		: "only sed scripts that print, delete or substitute (p, d, q, s///g) are allowed; use read or grep instead";
-};
-
-const awk: ArgRule = (args) => {
-	for (const arg of args) {
-		if (arg === "-f" || arg.startsWith("--file")) return "awk -f is not allowed; give the program inline";
-		if (arg === "-i" || arg.startsWith("--include")) return "awk -i is not allowed";
-		if (/\bsystem\s*\(|\bgetline\b|[|>]|\bfflush\b|\bclose\s*\(/.test(arg))
-			return "awk programs with system(), getline, pipes or > are not allowed";
-	}
-	return undefined;
-};
-
-/** `find` actions that run commands, delete files or write output files. */
-const FIND_ACTIONS = ["-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprint", "-fprint0", "-fprintf", "-fls"];
-const find: ArgRule = (args) => {
-	const bad = args.find((a) => FIND_ACTIONS.includes(a));
-	return bad ? `find ${bad} is not read-only` : undefined;
-};
-
-const GIT_READ = [
-	"status",
-	"log",
-	"show",
-	"diff",
-	"blame",
-	"annotate",
-	"shortlog",
-	"describe",
-	"rev-parse",
-	"rev-list",
-	"ls-files",
-	"ls-tree",
-	"ls-remote",
-	"cat-file",
-	"grep",
-	"merge-base",
-	"name-rev",
-	"count-objects",
-	"whatchanged",
-	"show-ref",
-	"show-branch",
-	"for-each-ref",
-	"cherry",
-	"range-diff",
-	"diff-tree",
-	"diff-files",
-	"diff-index",
-	"check-ignore",
-	"check-attr",
-	"var",
-	"version",
-	"branch",
-	"tag",
-	"remote",
-	"stash",
-	"worktree",
-	"config",
-	"reflog",
-	"notes",
-	"submodule",
-];
-
-/** Options of `git branch` and `git tag` that take a value, so the next word is not a new name. */
-const LIST_VALUE_OPTIONS = [
-	"--contains",
-	"--no-contains",
-	"--merged",
-	"--no-merged",
-	"--points-at",
-	"--sort",
-	"--format",
-];
-
-function listOnly(command: string, denied: string[]): ArgRule {
-	return (args) => {
-		const listing = args.some((a) => a === "-l" || a === "--list");
-		for (let i = 0; i < args.length; i++) {
-			const arg = args[i]!;
-			const name = arg.split("=")[0]!;
-			if (
-				denied.includes(name) ||
-				(/^-[A-Za-z]+$/.test(arg) && [...arg.slice(1)].some((c) => denied.includes(`-${c}`)))
-			)
-				return `git ${command} ${arg} is not read-only`;
-			if (LIST_VALUE_OPTIONS.includes(arg)) i++;
-			else if (!arg.startsWith("-") && !listing)
-				return `git ${command} ${arg} creates a ${command}; use git ${command} --list to list them`;
+/**
+ * sed without `-i`, `-f` and `-l` (a value in GNU sed, a flag in BSD sed, so the script could hide behind it).
+ * The scripts are the `-e` values, or else the first argument.
+ */
+const sed = options(
+	"sed",
+	{
+		flags: "nErsuz",
+		values: "e",
+		long: ["quiet", "silent", "regexp-extended", "separate", "unbuffered", "null-data", "posix", "debug", "sandbox"],
+		longValues: ["expression"],
+		globs: true,
+	},
+	(p) => {
+		const scripts = p.options.filter((o) => o.name === "-e" || o.name === "--expression").map((o) => o.value ?? "");
+		if (!scripts.length) {
+			const first = p.positional[0];
+			if (!first) return "sed needs a script";
+			if (first.glob) return `quote the sed script "${first.value}"`;
+			scripts.push(first.value);
 		}
-		return undefined;
-	};
-}
-
-const git: ArgRule = (args) => {
-	let i = 0;
-	// Global options before the subcommand.
-	while (i < args.length && args[i]!.startsWith("-")) {
-		const arg = args[i]!;
-		if (arg === "--version" || arg === "--help") return undefined;
-		if (arg === "-c" || arg.startsWith("--config-env") || arg.startsWith("--exec-path"))
-			return `git ${arg} is not allowed in read-only mode`;
-		if (arg === "-C" || arg === "--git-dir" || arg === "--work-tree" || arg === "--namespace") i += 2;
-		else i++;
-	}
-	const rest = args.slice(i);
-	for (const arg of rest) {
-		if (arg.startsWith("--output") || arg === "-O" || arg.startsWith("--open-files-in-pager"))
-			return `git ${arg.split("=")[0]} is not read-only`;
-	}
-	return subcommands("git", GIT_READ, {
-		branch: listOnly("branch", [
-			"-d",
-			"-D",
-			"-m",
-			"-M",
-			"-c",
-			"-C",
-			"-f",
-			"-u",
-			"-t",
-			"--delete",
-			"--move",
-			"--copy",
-			"--force",
-			"--track",
-			"--set-upstream-to",
-			"--unset-upstream",
-			"--edit-description",
-		]),
-		tag: listOnly("tag", [
-			"-d",
-			"-a",
-			"-s",
-			"-u",
-			"-f",
-			"-m",
-			"-F",
-			"-e",
-			"--delete",
-			"--annotate",
-			"--sign",
-			"--force",
-		]),
-		remote: (a) =>
-			a.length === 0 || a[0] === "-v" || a[0] === "show" || a[0] === "get-url"
-				? undefined
-				: "only git remote, -v, show and get-url are allowed",
-		stash: (a) => (a[0] === "list" || a[0] === "show" ? undefined : "only git stash list and show are allowed"),
-		worktree: (a) => (a[0] === "list" ? undefined : "only git worktree list is allowed"),
-		notes: (a) => (a[0] === "list" || a[0] === "show" ? undefined : "only git notes list and show are allowed"),
-		submodule: (a) => (a.length === 0 || a[0] === "status" ? undefined : "only git submodule status is allowed"),
-		reflog: (a) =>
-			a.length === 0 || a[0] === "show" || a[0]!.startsWith("-") ? undefined : `git reflog ${a[0]} is not read-only`,
-		config: (a) => {
-			const reads = [
-				"--get",
-				"--get-all",
-				"--get-regexp",
-				"--list",
-				"-l",
-				"--get-urlmatch",
-				"--show-origin",
-				"--show-scope",
-			];
-			if (a[0] === "get" || a[0] === "list") return undefined;
-			return a.some((x) => reads.includes(x)) &&
-				!a.some((x) =>
-					[
-						"--add",
-						"--unset",
-						"--unset-all",
-						"--replace-all",
-						"--edit",
-						"-e",
-						"--rename-section",
-						"--remove-section",
-					].includes(x),
-				)
-				? undefined
-				: "only git config --get and --list are allowed";
-		},
-	})(rest);
-};
-
-const gh: ArgRule = (args) => {
-	const read: Record<string, string[]> = {
-		pr: ["view", "list", "diff", "checks", "status"],
-		issue: ["view", "list", "status"],
-		run: ["view", "list"],
-		workflow: ["view", "list"],
-		repo: ["view"],
-		release: ["view", "list"],
-		search: ["repos", "issues", "prs", "code", "commits"],
-	};
-	const [group, sub] = args;
-	if (group === "status" || group === "--version") return undefined;
-	if (group === "api") {
-		const bad = args.find(
-			(a, i) =>
-				["-f", "-F", "--field", "--raw-field", "--input"].includes(a.split("=")[0]!) ||
-				((a === "-X" || a === "--method") && !/^(GET|HEAD)$/i.test(args[i + 1] ?? "")) ||
-				(a.startsWith("--method=") && !/^--method=(GET|HEAD)$/i.test(a)),
-		);
-		return bad ? `gh api ${bad} is not read-only; only GET requests are allowed` : undefined;
-	}
-	if (!group || !read[group]) return `gh ${group ?? ""} is not read-only`.trim();
-	if (!sub || !read[group]!.includes(sub)) return `gh ${group} ${sub ?? ""} is not read-only`.trim();
-	return undefined;
-};
-
-const npmRead = [
-	"ls",
-	"list",
-	"view",
-	"info",
-	"show",
-	"outdated",
-	"why",
-	"explain",
-	"search",
-	"root",
-	"prefix",
-	"query",
-];
-const npm = subcommands("npm", [...npmRead, "audit", "config"], {
-	audit: (a) => (a.includes("fix") ? "npm audit fix is not read-only" : undefined),
-	config: (a) =>
-		a[0] === "get" || a[0] === "list" || a[0] === "ls" ? undefined : "only npm config get and list are allowed",
-});
-
-const curl = denyFlags(
-	"curl",
-	[
-		"--output",
-		"--output-dir",
-		"--remote-name",
-		"--remote-name-all",
-		"--upload-file",
-		"--data",
-		"--data-raw",
-		"--data-binary",
-		"--data-urlencode",
-		"--json",
-		"--form",
-		"--form-string",
-		"--request",
-		"--cookie-jar",
-		"--dump-header",
-		"--config",
-		"--trace",
-		"--trace-ascii",
-		"--stderr",
-		"--libcurl",
-	],
-	"oOTdFXcDK",
+		return scripts.every(safeSedScript)
+			? undefined
+			: "only sed scripts that print, delete or substitute (p, d, q, s///g) are allowed; use read or grep instead";
+	},
 );
 
 /**
- * Commands allowed in architect mode, with checks for the ones that can also write.
+ * awk with the program inline. The program may not mention anything that runs a command or opens a file:
+ * `system`, `getline`, `close`, `fflush`, `|`, `>`, and `@` (gawk's indirect calls and `@load`).
+ */
+const AWK_UNSAFE = /system|getline|close|fflush|[@|>]|\\\n/;
+const awk: ArgRule = (args) => {
+	if (args.length === 1 && args[0]!.value === "--version") return undefined;
+	return options("awk", { values: "Fv", globs: true }, (p) => {
+		const program = p.positional[0];
+		if (!program) return "awk needs a program; awk -f is not allowed";
+		if (program.glob) return `quote the awk program "${program.value}"`;
+		if (AWK_UNSAFE.test(program.value))
+			return "awk programs may not use system, getline, close, fflush, @, | or > (compare with < instead of >)";
+		return undefined;
+	})(args);
+};
+
+const FIND_VALUE = new Set([
+	"-name",
+	"-iname",
+	"-path",
+	"-ipath",
+	"-wholename",
+	"-iwholename",
+	"-regex",
+	"-iregex",
+	"-type",
+	"-xtype",
+	"-size",
+	"-mtime",
+	"-mmin",
+	"-atime",
+	"-amin",
+	"-ctime",
+	"-cmin",
+	"-newer",
+	"-anewer",
+	"-cnewer",
+	"-perm",
+	"-user",
+	"-group",
+	"-uid",
+	"-gid",
+	"-links",
+	"-inum",
+	"-samefile",
+	"-lname",
+	"-ilname",
+	"-used",
+	"-fstype",
+	"-maxdepth",
+	"-mindepth",
+	"-regextype",
+	"-printf",
+]);
+const FIND_FLAG = new Set([
+	"-nouser",
+	"-nogroup",
+	"-empty",
+	"-readable",
+	"-writable",
+	"-executable",
+	"-true",
+	"-false",
+	"-print",
+	"-print0",
+	"-ls",
+	"-prune",
+	"-quit",
+	"-depth",
+	"-d",
+	"-follow",
+	"-xdev",
+	"-mount",
+	"-noleaf",
+	"-daystart",
+	"-ignore_readdir_race",
+	"-noignore_readdir_race",
+	"-warn",
+	"-nowarn",
+	"-not",
+	"-a",
+	"-and",
+	"-o",
+	"-or",
+	"-L",
+	"-H",
+	"-P",
+	"-E",
+	"-x",
+	"-s",
+]);
+const FIND_RUNS = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+
+/** find with allowlisted tests and actions. `-exec`, `-ok`, `-delete` and `-fprint` are not on the list. */
+const find: ArgRule = (args) => {
+	for (let i = 0; i < args.length; i++) {
+		const { value, glob } = args[i]!;
+		if (!value.startsWith("-") || value === "-") {
+			if (glob && !/^[A-Za-z0-9._/]/.test(value)) return `quote "${value}": find does not take that pattern there`;
+			continue;
+		}
+		if (glob) return `quote "${value}"`;
+		if (FIND_RUNS.has(value)) return `find ${value} runs commands; list the files with find, then read them`;
+		if (value === "-delete") return "find -delete deletes files";
+		if (FIND_FLAG.has(value)) continue;
+		if (FIND_VALUE.has(value) || /^-newer[aBcmt][aBcmt]$/.test(value)) {
+			const next = args[++i];
+			if (!next) return `find ${value} needs a value`;
+			if (next.glob) return `quote the pattern after find ${value}: '${next.value}'`;
+			if (/^-[^\d]/.test(next.value)) return `find ${value} cannot take "${next.value}" as its value`;
+			continue;
+		}
+		if (["-fprint", "-fprint0", "-fprintf", "-fls"].includes(value))
+			return `find ${value} writes a file; use -print or -printf`;
+		return `find ${value} is not allowed in architect mode`;
+	}
+	return undefined;
+};
+
+/** sort without `-o`, `-T` and `--compress-program`. */
+const sort = options("sort", {
+	flags: "bdfghiMnrRsuVcCzm",
+	values: "ktS",
+	long: [
+		"ignore-leading-blanks",
+		"dictionary-order",
+		"ignore-case",
+		"general-numeric-sort",
+		"human-numeric-sort",
+		"ignore-nonprinting",
+		"month-sort",
+		"numeric-sort",
+		"reverse",
+		"random-sort",
+		"stable",
+		"unique",
+		"version-sort",
+		"merge",
+		"zero-terminated",
+		"debug",
+	],
+	longValues: ["key", "field-separator", "sort", "buffer-size", "parallel"],
+	longOptional: ["check"],
+	globs: true,
+});
+
+/** uniq reads one file; a second file is its output. */
+const uniq = options(
+	"uniq",
+	{
+		flags: "cdDuiz",
+		values: "fsw",
+		long: ["count", "repeated", "unique", "ignore-case", "zero-terminated"],
+		longValues: ["skip-fields", "skip-chars", "check-chars"],
+		longOptional: ["all-repeated", "group"],
+	},
+	(p) => (p.positional.length <= 1 ? undefined : "uniq with a second file writes to it; pipe the output instead"),
+);
+
+/** tree without `-o` (output file) and `-R` (writes 00Tree.html files). */
+const tree = options("tree", {
+	flags: "adlfiqNQpugshDFvtcrUCnxJX",
+	values: "LPI",
+	long: ["du", "si", "dirsfirst", "noreport", "gitignore", "prune", "matchdirs", "ignore-case"],
+	longValues: ["charset", "filelimit", "sort"],
+	globs: true,
+});
+
+/** ripgrep without `--pre`, `--hostname-bin` and `--search-zip`, which run programs. */
+const rg = options("rg", {
+	flags: "isSwxvlcnNoquUFPHIaL0",
+	values: "ABCegtTmMjrEd",
+	long: [
+		"hidden",
+		"no-ignore",
+		"no-ignore-vcs",
+		"no-ignore-dot",
+		"no-ignore-parent",
+		"ignore-case",
+		"smart-case",
+		"case-sensitive",
+		"word-regexp",
+		"line-regexp",
+		"invert-match",
+		"files",
+		"files-with-matches",
+		"files-without-match",
+		"count",
+		"count-matches",
+		"line-number",
+		"no-line-number",
+		"only-matching",
+		"quiet",
+		"fixed-strings",
+		"multiline",
+		"multiline-dotall",
+		"pcre2",
+		"json",
+		"vimgrep",
+		"heading",
+		"no-heading",
+		"column",
+		"with-filename",
+		"no-filename",
+		"follow",
+		"text",
+		"null",
+		"stats",
+		"type-list",
+		"trim",
+		"passthru",
+		"unrestricted",
+		"binary",
+		"no-messages",
+		"max-columns-preview",
+		"one-file-system",
+		"no-config",
+		"byte-offset",
+		"invert-match",
+		"no-unicode",
+		"crlf",
+	],
+	longValues: [
+		"sort",
+		"sortr",
+		"type",
+		"type-not",
+		"glob",
+		"iglob",
+		"max-count",
+		"max-depth",
+		"max-filesize",
+		"context",
+		"after-context",
+		"before-context",
+		"regexp",
+		"replace",
+		"color",
+		"colors",
+		"max-columns",
+		"context-separator",
+		"threads",
+		"encoding",
+		"engine",
+		"path-separator",
+	],
+	globs: true,
+});
+
+/** fd without `-x`/`--exec`, `-X`/`--exec-batch` and `-l` (which runs ls). */
+const fd = options("fd", {
+	flags: "HIusigFapL01q",
+	values: "etEdcjS",
+	long: [
+		"hidden",
+		"no-ignore",
+		"no-ignore-vcs",
+		"unrestricted",
+		"case-sensitive",
+		"ignore-case",
+		"glob",
+		"regex",
+		"fixed-strings",
+		"absolute-path",
+		"full-path",
+		"follow",
+		"print0",
+		"quiet",
+		"show-errors",
+		"prune",
+		"one-file-system",
+	],
+	longValues: [
+		"type",
+		"extension",
+		"exclude",
+		"max-depth",
+		"min-depth",
+		"exact-depth",
+		"max-results",
+		"size",
+		"changed-within",
+		"changed-before",
+		"owner",
+		"color",
+		"search-path",
+		"base-directory",
+	],
+	longOptional: ["strip-cwd-prefix"],
+	globs: true,
+});
+
+/** bat without `--pager`; paging only as `--paging=never` or `-P`. */
+const bat = options("bat", {
+	flags: "npAPfu",
+	values: "lrHm",
+	long: ["number", "plain", "show-all", "force-colorization", "diff", "list-languages", "list-themes", "unbuffered"],
+	longValues: [
+		"language",
+		"line-range",
+		"highlight-line",
+		"style",
+		"color",
+		"theme",
+		"decorations",
+		"wrap",
+		"tabs",
+		"file-name",
+		"terminal-width",
+		"map-syntax",
+		"diff-context",
+		"paging",
+	],
+	globs: true,
+	check: (option, value) =>
+		option === "--paging" && value !== "never" ? "only bat --paging=never is allowed; use -P" : undefined,
+});
+
+/** yq (Go or Python) without `-i` (in place), `-s` (split into files) and expression files. */
+const yq = options("yq", {
+	flags: "reMCPNy",
+	values: "op",
+	long: ["yaml-output"],
+	longValues: ["output-format", "input-format"],
+});
+
+/** file without `-C` (compiles a magic file) and `-p` (resets access times). */
+const file = options("file", {
+	flags: "bikLhNnrs0E",
+	values: "efFP",
+	long: [
+		"brief",
+		"mime",
+		"mime-type",
+		"mime-encoding",
+		"extension",
+		"keep-going",
+		"dereference",
+		"no-dereference",
+		"no-pad",
+		"raw",
+		"special-files",
+		"print0",
+	],
+	longValues: ["exclude", "files-from", "separator", "parameter"],
+	globs: true,
+});
+
+/** date that shows a date, not one that sets the clock. The only argument is a +FORMAT. */
+const date = options(
+	"date",
+	{
+		flags: "uR",
+		values: "rv",
+		attached: "I",
+		long: ["utc", "universal", "rfc-email", "debug"],
+		longValues: ["date", "reference", "rfc-3339"],
+		longOptional: ["iso-8601"],
+	},
+	(p) =>
+		p.positional.every((a) => a.value.startsWith("+")) && p.positional.length <= 1
+			? undefined
+			: "date only takes a +FORMAT; other arguments set the clock",
+);
+
+/** hostname that prints the name, not one that sets it. */
+const hostname = options(
+	"hostname",
+	{
+		flags: "sfdiIAa",
+		long: ["short", "fqdn", "long", "domain", "ip-address", "all-ip-addresses", "all-fqdns", "alias"],
+	},
+	(p) => (p.positional.length ? "hostname with a name sets it" : undefined),
+);
+
+/** bash's printf -v and test -v evaluate array subscripts, which can run commands. */
+const printf: ArgRule = (args) => {
+	const first = args[0]?.value;
+	if (first !== undefined && first.startsWith("-") && first !== "--")
+		return "printf options are not allowed (printf -v can run code); put -- before a format that starts with -";
+	return noGlobs("printf", args);
+};
+
+function test(command: string): ArgRule {
+	return (args) => {
+		const bad = args.find((a) => a.value === "-v" || a.value === "-R");
+		if (bad) return `${command} ${bad.value} is not allowed: it can run code through array subscripts`;
+		return noGlobs(command, args);
+	};
+}
+
+/** curl GET and HEAD requests over http(s), printing to stdout. No uploads, output files or config files. */
+const curl = options(
+	"curl",
+	{
+		flags: "sSLIivfk46#G",
+		values: "HAemuxrbX",
+		long: [
+			"silent",
+			"show-error",
+			"location",
+			"head",
+			"include",
+			"verbose",
+			"fail",
+			"fail-with-body",
+			"insecure",
+			"compressed",
+			"http1.1",
+			"http2",
+			"ipv4",
+			"ipv6",
+			"globoff",
+			"no-progress-meter",
+			"progress-bar",
+			"get",
+		],
+		longValues: [
+			"header",
+			"user-agent",
+			"referer",
+			"max-time",
+			"connect-timeout",
+			"retry",
+			"retry-delay",
+			"max-redirs",
+			"user",
+			"proxy",
+			"range",
+			"cookie",
+			"url",
+			"request",
+		],
+		check: (option, value) => {
+			if ((option === "-X" || option === "--request") && !/^(GET|HEAD)$/i.test(value ?? ""))
+				return `curl ${option} ${value ?? ""} is not read-only; only GET and HEAD are allowed`;
+			if (option === "--url" && !/^https?:\/\//i.test(value ?? ""))
+				return "curl only fetches http:// and https:// URLs";
+			return undefined;
+		},
+	},
+	(p) => {
+		if (p.positional.some((a) => !/^https?:\/\//i.test(a.value)))
+			return "curl only fetches http:// and https:// URLs; write the scheme out";
+		return undefined;
+	},
+);
+
+/** gh read commands. `--web` and `-w` open a browser and `--watch` keeps running, so they are left out. */
+const GH_READ: Record<string, string[]> = {
+	pr: ["view", "list", "diff", "checks", "status"],
+	issue: ["view", "list", "status"],
+	run: ["view", "list"],
+	workflow: ["view", "list"],
+	repo: ["view"],
+	release: ["view", "list"],
+	search: ["repos", "issues", "prs", "code", "commits"],
+};
+
+const GH: OptionSpec = {
+	flags: "vyd",
+	values: "qtRLsAlBHSjuebrOo",
+	long: [
+		"comments",
+		"name-only",
+		"patch",
+		"log",
+		"log-failed",
+		"verbose",
+		"exit-status",
+		"all",
+		"yaml",
+		"draft",
+		"required",
+		"exclude-drafts",
+		"exclude-pre-releases",
+		"conflict-status",
+		"archived",
+		"include-forks",
+	],
+	longValues: [
+		"json",
+		"jq",
+		"template",
+		"repo",
+		"limit",
+		"state",
+		"assignee",
+		"author",
+		"label",
+		"base",
+		"head",
+		"search",
+		"color",
+		"branch",
+		"job",
+		"attempt",
+		"workflow",
+		"user",
+		"event",
+		"status",
+		"commit",
+		"created",
+		"updated",
+		"ref",
+		"order",
+		"sort",
+		"owner",
+		"language",
+		"filename",
+		"extension",
+		"match",
+		"visibility",
+		"topic",
+		"milestone",
+		"mention",
+		"org",
+		"exclude",
+	],
+};
+
+/** gh api GET requests: no fields, no input, no method but GET, and only Accept or API version headers. */
+const ghApi = options(
+	"gh api",
+	{
+		flags: "i",
+		values: "HXqtp",
+		long: ["include", "paginate", "slurp", "silent", "verbose"],
+		longValues: ["header", "method", "jq", "template", "hostname", "cache", "preview"],
+		check: (option, value) => {
+			if ((option === "-X" || option === "--method") && !/^(GET|HEAD)$/i.test(value ?? ""))
+				return `gh api ${option} ${value ?? ""} is not read-only; only GET requests are allowed`;
+			if ((option === "-H" || option === "--header") && !/^\s*(accept|x-github-api-version)\s*:/i.test(value ?? ""))
+				return "gh api only takes Accept and X-GitHub-Api-Version headers";
+			return undefined;
+		},
+	},
+	(p) => {
+		if (p.positional.length !== 1) return "gh api takes one endpoint";
+		if (p.positional[0]!.value === "graphql") return "gh api graphql sends a POST; use gh pr view or gh issue view";
+		return undefined;
+	},
+);
+
+const gh: ArgRule = (args) => {
+	const [group, sub] = values(args);
+	if (group === "--version" || group === "version") return args.length === 1 ? undefined : "use gh --version alone";
+	if (group === "status") return options("gh status", GH)(args.slice(1));
+	if (group === "api") return ghApi(args.slice(1));
+	if (!group || !GH_READ[group]) return `gh ${group ?? ""} is not read-only`.trim();
+	if (!sub || !GH_READ[group]!.includes(sub)) return `gh ${group} ${sub ?? ""} is not read-only`.trim();
+	return options(`gh ${group} ${sub}`, GH)(args.slice(2));
+};
+
+/**
+ * npm subcommands that read. Only long options from a short list: npm accepts any config key as an option
+ * (`--cache`, `--logs-dir` and others write files), and abbreviations of them.
+ */
+const NPM: OptionSpec = {
+	long: [
+		"json",
+		"all",
+		"long",
+		"parseable",
+		"global",
+		"prod",
+		"production",
+		"dev",
+		"workspaces",
+		"include-workspace-root",
+	],
+	longValues: ["depth", "omit", "include", "workspace", "audit-level"],
+};
+const NPM_READ = ["ls", "list", "view", "info", "show", "outdated", "why", "explain", "root", "prefix", "query"];
+const npm: ArgRule = (args) => {
+	const [subcommand] = values(args);
+	if (subcommand === "--version" || subcommand === "-v")
+		return args.length === 1 ? undefined : "use npm --version alone";
+	if (subcommand === "audit")
+		return options("npm audit", NPM, (p) =>
+			p.positional.length ? `npm audit ${p.positional[0]!.value} is not allowed; use npm audit alone` : undefined,
+		)(args.slice(1));
+	if (subcommand === "config") {
+		const [, action] = values(args);
+		if (action !== "get" && action !== "list" && action !== "ls")
+			return "only npm config get and npm config list are allowed";
+		return options(`npm config ${action}`, NPM)(args.slice(2));
+	}
+	if (!subcommand || !NPM_READ.includes(subcommand))
+		return `npm ${subcommand ?? ""} is not read-only; use one of: ${NPM_READ.join(", ")}`;
+	return options(`npm ${subcommand}`, NPM)(args.slice(1));
+};
+
+/** go version, env, list and doc. Go flags take one or two dashes. `go env -w` and build flags like `-toolexec` are left out. */
+const GO: Record<string, OptionSpec> = {
+	version: { long: ["m", "v", "json"], singleDash: true },
+	env: { long: ["json", "changed"], singleDash: true },
+	list: {
+		long: ["m", "e", "deps", "test", "find", "versions", "u", "retracted"],
+		longValues: ["f", "tags"],
+		longOptional: ["json"],
+		singleDash: true,
+	},
+	doc: { long: ["all", "c", "cmd", "short", "src", "u"], singleDash: true },
+};
+const go: ArgRule = (args) => {
+	const [subcommand] = values(args);
+	const spec = subcommand === undefined ? undefined : GO[subcommand];
+	if (!spec) return `go ${subcommand ?? ""} is not read-only; use go version, env, list or doc`;
+	return options(`go ${subcommand}`, spec)(args.slice(1));
+};
+
+/**
+ * Commands allowed in architect mode, with checks for the ones that have options that write or run something.
  * Anything not listed is refused. Interactive tools (less, vim, top) are left out because the agent cannot use them.
  */
 export const COMMANDS: Record<string, ArgRule> = {
@@ -352,7 +693,6 @@ export const COMMANDS: Record<string, ArgRule> = {
 	pwd: ANY,
 	cd: ANY,
 	echo: ANY,
-	printf: ANY,
 	wc: ANY,
 	grep: ANY,
 	egrep: ANY,
@@ -360,7 +700,6 @@ export const COMMANDS: Record<string, ArgRule> = {
 	diff: ANY,
 	cmp: ANY,
 	comm: ANY,
-	file: ANY,
 	stat: ANY,
 	du: ANY,
 	df: ANY,
@@ -370,8 +709,6 @@ export const COMMANDS: Record<string, ArgRule> = {
 	whoami: ANY,
 	id: ANY,
 	uname: ANY,
-	hostname: ANY,
-	date: ANY,
 	basename: ANY,
 	dirname: ANY,
 	realpath: ANY,
@@ -388,34 +725,34 @@ export const COMMANDS: Record<string, ArgRule> = {
 	hexdump: ANY,
 	true: ANY,
 	false: ANY,
-	test: ANY,
-	"[": ANY,
 	ps: ANY,
 	uptime: ANY,
 	printenv: ANY,
 	seq: ANY,
 	jq: ANY,
 	tokei: ANY,
-	cloc: ANY,
 	md5sum: ANY,
 	md5: ANY,
 	shasum: ANY,
 	sha1sum: ANY,
 	sha256sum: ANY,
 	cksum: ANY,
-	bat: ANY,
 	eza: ANY,
 	exa: ANY,
-	ag: ANY,
-	ack: ANY,
+	printf,
+	test: test("test"),
+	"[": test("["),
 	env: (args) => (args.length === 0 ? undefined : "env with arguments runs a command; run the command directly"),
-	sort: denyFlags("sort", ["--output", "--compress-program"], "o"),
-	uniq: (args) => (positional(args).length <= 1 ? undefined : "uniq with an output file is not read-only"),
-	tree: denyFlags("tree", [], "o"),
-	xxd: denyFlags("xxd", ["--revert"], "r"),
-	yq: denyFlags("yq", ["--inplace"], "i"),
-	rg: denyFlags("rg", ["--pre"]),
-	fd: denyFlags("fd", ["--exec", "--exec-batch"], "xX"),
+	date,
+	hostname,
+	file,
+	sort,
+	uniq,
+	tree,
+	rg,
+	fd,
+	bat,
+	yq,
 	find,
 	sed,
 	awk,
@@ -423,53 +760,62 @@ export const COMMANDS: Record<string, ArgRule> = {
 	git,
 	gh,
 	npm,
-	pnpm: subcommands("pnpm", ["ls", "list", "why", "outdated", "view", "info"]),
-	yarn: subcommands("yarn", ["list", "info", "why", "outdated"]),
-	node: versionOnly("node"),
-	python: versionOnly("python"),
-	python3: versionOnly("python3"),
-	deno: versionOnly("deno"),
-	bun: versionOnly("bun"),
-	ruby: versionOnly("ruby"),
-	go: subcommands("go", ["version", "list", "doc", "env"], {
-		env: (a) => (a.some((x) => x === "-w" || x === "-u") ? "go env -w changes settings" : undefined),
-	}),
-	cargo: subcommands("cargo", ["tree", "metadata", "search"]),
+	go,
+	node: versionOnly("node", ["--version", "-v"]),
+	python: versionOnly("python", ["--version", "-V"]),
+	python3: versionOnly("python3", ["--version", "-V"]),
+	deno: versionOnly("deno", ["--version", "-V"]),
+	bun: versionOnly("bun", ["--version"]),
+	ruby: versionOnly("ruby", ["--version"]),
 	curl,
 };
 
-/** Variables a command may set for itself. Others (PATH, LD_PRELOAD, GIT_PAGER, …) could run other programs. */
-const SAFE_ENV = /^(NO_COLOR|FORCE_COLOR|CLICOLOR|TERM|LANG|LC_[A-Z]+|COLUMNS|LINES|TZ)$/;
-const ASSIGNMENT = /^([A-Za-z_][A-Za-z0-9_]*)=/;
+/** Hints for commands people often reach for. */
+const INSTEAD: Record<string, string> = {
+	xxd: "use od or hexdump",
+	cloc: "use tokei",
+	ag: "use rg or grep",
+	ack: "use rg or grep",
+	less: "use the read tool",
+	more: "use the read tool",
+	touch: "describe the change in the design instead",
+	rm: "describe the change in the design instead",
+	mv: "describe the change in the design instead",
+	cp: "describe the change in the design instead",
+	mkdir: "describe the change in the design instead",
+};
 
 function checkRedirect(redirect: Redirect): string | undefined {
 	const { op, target } = redirect;
+	if (/^\/dev\/(tcp|udp)\//.test(target.value)) return "network redirections (/dev/tcp) are not allowed";
 	if (op === "<" || op === "<<<") return undefined;
 	if (op === ">&" || op === "<&")
 		return /^(\d+|-)$/.test(target.value) ? undefined : `"${op}${target.value}" writes a file`;
-	return target.literal && target.value === "/dev/null"
+	return target.value === "/dev/null" && !target.glob
 		? undefined
-		: `redirecting output to "${target.value}" writes a file`;
+		: `redirecting output to "${target.value}" writes a file; only /dev/null is allowed`;
 }
+
+const ASSIGNMENT = /^[A-Za-z_][A-Za-z0-9_]*(\[[^\]]*\])?\+?=/;
 
 function checkCommand(command: SimpleCommand): string | undefined {
 	for (const redirect of command.redirects) {
 		const reason = checkRedirect(redirect);
 		if (reason) return reason;
 	}
-	const words: Word[] = [...command.words];
-	while (words.length && words[0]!.literal && ASSIGNMENT.test(words[0]!.value)) {
-		const name = ASSIGNMENT.exec(words[0]!.value)![1]!;
-		if (!SAFE_ENV.test(name)) return `setting ${name} is not allowed`;
-		words.shift();
-	}
-	const [name, ...args] = words;
+	const [name, ...args] = command.words;
 	if (!name) return undefined;
-	if (!name.literal) return "the command name must be written out, not taken from a variable";
+	if (ASSIGNMENT.test(name.value))
+		return `variable assignments (${name.value.split("=")[0]}=…) are not allowed; run the command without them`;
+	if (name.glob) return `the command name must be written out ("${name.value}")`;
+	if (name.value === "{" || name.value === "}") return "command groups ({ …; }) are not allowed";
 	if (name.value.includes("/")) return `run commands by name, not by path (${name.value})`;
-	const rule = COMMANDS[name.value];
-	if (!rule) return `${name.value} is not a read-only command`;
-	return rule(args.map((a) => a.value));
+	const rule = Object.hasOwn(COMMANDS, name.value) ? COMMANDS[name.value] : undefined;
+	if (!rule) {
+		const hint = INSTEAD[name.value];
+		return `${name.value} is not a read-only command${hint ? `; ${hint}` : ""}`;
+	}
+	return rule(args);
 }
 
 export type CommandCheck = { ok: true } | { ok: false; reason: string };

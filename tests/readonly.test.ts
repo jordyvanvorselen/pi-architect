@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { checkReadOnly } from "../src/readonly/commands.ts";
 import { blockReason } from "../src/readonly/index.ts";
 import { parseCommandLine } from "../src/readonly/shell.ts";
+import { ATTACKS, LEGIT } from "./readonly-cases.ts";
 
 function allowed(command: string) {
 	const result = checkReadOnly(command);
@@ -25,17 +26,17 @@ describe("shell lexer", () => {
 		);
 	});
 
-	it("removes quotes and escapes, and tracks expansions", () => {
-		const parsed = parseCommandLine(`grep "a b" 'c $d' e\\ f "$HOME" $'g\\'h'`);
+	it("removes quotes and escapes, and marks unquoted globs", () => {
+		const parsed = parseCommandLine(`grep "a b" 'c $d' e\\ f '*.ts' *.md a\\*b x[1] [`);
 		assert.ok(parsed.ok);
 		const words = parsed.commands[0]!.words;
 		assert.deepEqual(
 			words.map((w) => w.value),
-			["grep", "a b", "c $d", "e f", "$HOME", "g\\'h"],
+			["grep", "a b", "c $d", "e f", "*.ts", "*.md", "a*b", "x[1]", "["],
 		);
 		assert.deepEqual(
-			words.map((w) => w.literal),
-			[true, true, true, true, false, true],
+			words.map((w) => w.glob),
+			[false, false, false, false, false, true, false, true, false],
 		);
 	});
 
@@ -68,240 +69,145 @@ describe("shell lexer", () => {
 	it("refuses unclosed quotes and a trailing backslash", () => {
 		assert.equal(parseCommandLine("echo 'x").ok, false);
 		assert.equal(parseCommandLine('echo "x').ok, false);
-		assert.equal(parseCommandLine("echo $'x").ok, false);
 		assert.equal(parseCommandLine("echo x\\").ok, false);
 	});
 
 	it("refuses a redirection without a target", () => {
 		assert.deepEqual(parseCommandLine("ls >"), { ok: false, reason: '">" has no target' });
 	});
-});
 
-describe("read-only commands", () => {
-	it("allows plain reading and searching", () => {
+	it("refuses every word bash would expand", () => {
+		for (const [command, reason] of [
+			["echo $HOME", /\$ is not allowed/],
+			['echo "$HOME"', /\$ is not allowed/],
+			['echo "${x}"', /\$ is not allowed/],
+			["echo $'\\x41'", /\$ is not allowed/],
+			['echo $"x"', /\$ is not allowed/],
+			["echo $((1+1))", /\$ is not allowed/],
+			["echo x$", /\$ is not allowed/],
+			["echo `id`", /command substitution/],
+			['echo "`id`"', /command substitution/],
+			["echo {a,b}", /brace expansion/],
+			["echo {1..3}", /brace expansion/],
+			["echo x{a,'b'}y", /brace expansion/],
+			["echo ~root", /only ~ and ~\/path/],
+			["echo ~+", /only ~ and ~\/path/],
+			["echo ~-/x", /only ~ and ~\/path/],
+			["echo a=~/x", /after = or :/],
+			["echo --opt=~/x", /after = or :/],
+			["echo PATH:~/bin", /after = or :/],
+			["cat <(ls)", /process substitution/],
+			["ls >(cat)", /process substitution/],
+			["echo a\rb", /control characters/],
+		] as const)
+			assert.match((parseCommandLine(command) as { reason: string }).reason, reason, command);
+	});
+
+	it("keeps quoted or escaped specials as text", () => {
 		for (const command of [
-			"ls -la src",
-			"cat package.json",
-			"head -50 src/index.ts",
-			"grep -rn 'TODO' src",
-			"rg -n --type ts appendEntry",
-			"find . -name '*.ts' -not -path './node_modules/*'",
-			"wc -l src/*.ts",
-			"tree -L 2",
-			"jq .scripts package.json",
-			"cd src && ls",
-			"echo hello",
-			"sort -u names.txt | uniq -c",
-			"fd -e ts",
-			"diff a.ts b.ts",
+			"echo '$HOME'",
+			'echo "\\$HOME"',
+			"echo \\$HOME",
+			"echo '{a,b}' \\{a,b}",
+			"echo '~root' \\~root",
+			"echo HEAD@{1} a{b}c",
+			"echo ~ ~/x",
 		])
-			allowed(command);
-	});
-
-	it("allows read-only git", () => {
-		for (const command of [
-			"git status",
-			"git log --oneline -20",
-			"git diff HEAD~1 -- src",
-			"git show HEAD:package.json",
-			"git -C ../other log",
-			"git --no-pager log -p",
-			"git blame src/index.ts",
-			"git branch -a",
-			"git branch --list 'feat/*'",
-			"git branch --contains abc123",
-			"git tag",
-			"git tag -l 'v*'",
-			"git remote -v",
-			"git stash list",
-			"git config --get user.name",
-			"git ls-files",
-			"git --version",
-			"git reflog",
-		])
-			allowed(command);
-	});
-
-	it("blocks git that writes", () => {
-		for (const command of [
-			"git commit -m x",
-			"git push",
-			"git checkout main",
-			"git reset --hard",
-			"git add .",
-			"git branch new-branch",
-			"git branch -D old",
-			"git tag v1.0",
-			"git tag -d v1.0",
-			"git stash",
-			"git config user.name x",
-			"git -c core.pager=evil log",
-			"git diff --output=x.patch",
-			"git grep -O foo",
-			"git remote add origin x",
-			"git reflog expire",
-			"git",
-		])
-			blocked(command);
-	});
-
-	it("blocks commands that are not on the allowlist", () => {
-		blocked("rm -rf src", /rm is not a read-only command/);
-		blocked("mv a b", /mv is not a read-only command/);
-		blocked("touch x");
-		blocked("npx prettier --write .");
-		blocked("xargs rm");
-		blocked("sudo ls");
-		blocked("bash -c 'rm x'");
-		blocked("vim file");
-	});
-
-	it("blocks writes hidden behind chaining", () => {
-		blocked("ls && rm x", /rm/);
-		blocked("ls; rm x", /rm/);
-		blocked("ls || rm x", /rm/);
-		blocked("cat x | tee y", /tee/);
-		blocked("ls\nrm x", /rm/);
-	});
-
-	it("blocks output redirection to files but allows /dev/null and descriptor copies", () => {
-		blocked("echo x > file", /writes a file/);
-		blocked("echo x >> file", /writes a file/);
-		blocked("ls >| file");
-		blocked("ls &> out.log");
-		blocked("ls 2> err.log");
-		blocked("ls >&out.log");
-		blocked('echo x > "$FILE"');
-		allowed("ls 2>/dev/null");
-		allowed("grep x y >/dev/null 2>&1");
-		allowed("wc -l < file.txt");
-		allowed("grep x <<< 'text'");
-	});
-
-	it("blocks subshells, substitutions, here-documents and background jobs", () => {
-		blocked("(rm x)", /subshells/);
-		blocked("echo $(rm x)", /command substitution/);
-		blocked('echo "$(rm x)"', /command substitution/);
-		blocked("echo `rm x`", /command substitution/);
-		blocked('echo "`rm x`"', /command substitution/);
-		blocked("diff <(ls a) <(ls b)", /process substitution/);
-		blocked("cat > x <<EOF\nhi\nEOF", /here-documents/);
-		blocked("sleep 10 &", /background/);
-		blocked("{ rm x; }");
-		blocked("ls <> file");
-		blocked("case x in a) ;; esac");
-	});
-
-	it("allows quoted operators as plain text", () => {
-		allowed("grep '&& rm' notes.md");
-		allowed('echo "a > b" "(c)"');
-		allowed("grep \\> file");
-	});
-
-	it("blocks commands named by variable or path, and unsafe variables", () => {
-		blocked("$CMD x", /written out/);
-		blocked("./script.sh", /by name/);
-		blocked("/bin/rm x", /by name/);
-		blocked("PATH=/tmp ls", /setting PATH/);
-		blocked("GIT_PAGER=evil git log", /setting GIT_PAGER/);
-		allowed("NO_COLOR=1 git log");
-		blocked("PATH=/tmp; ls", /setting PATH/);
-		allowed("TZ=UTC");
-	});
-
-	it("checks the arguments of commands that can also write", () => {
-		blocked("find . -delete", /find -delete/);
-		blocked("find . -name x -exec rm {} \\;", /find -exec/);
-		blocked("sort -o out.txt in.txt", /sort -o/);
-		blocked("sort --output=out.txt in.txt", /sort --output/);
-		blocked("uniq in.txt out.txt", /uniq/);
-		blocked("tree -o out.txt");
-		blocked("fd -x rm");
-		blocked("rg --pre ./evil foo");
-		blocked("xxd -r dump bin");
-		blocked("yq -i '.a = 1' x.yaml");
-		blocked("env rm x", /env/);
-		allowed("env");
-	});
-
-	it("allows sed only for printing, deleting and substituting", () => {
-		allowed("sed -n '10,40p' src/index.ts");
-		allowed("sed -n '/start/,/end/p' file");
-		allowed("sed 's/foo/bar/g' file");
-		allowed("sed -e 's|a|b|' -e '5q' file");
-		allowed("sed --expression=1d file");
-		allowed("cat x | sed 's/a\\/b/c/2'");
-		blocked("sed -i 's/a/b/' file", /sed -i/);
-		blocked("sed -ni 's/a/b/p' file", /sed -i/);
-		blocked("sed --in-place 's/a/b/' file", /sed -i/);
-		blocked("sed 's/a/b/w out' file", /only sed scripts/);
-		blocked("sed 'w out' file");
-		blocked("sed '1e rm x' file");
-		blocked("sed -f script.sed file", /sed -f/);
-		blocked("sed", /needs a script/);
-		blocked("sed 's/a/b' file");
-		blocked("sed 's a b ' file");
-	});
-
-	it("allows awk without system, getline, pipes or output redirection", () => {
-		allowed("awk '{print $1}' file");
-		blocked("awk 'BEGIN{system(\"rm x\")}'", /awk/);
-		blocked("awk '{print > \"out\"}' file", /awk/);
-		blocked("awk '{print | \"sh\"}' file");
-		blocked("awk -f prog.awk file");
-		blocked("gawk -i inplace '{print}' file");
-	});
-
-	it("allows read-only package manager, runtime and gh commands", () => {
-		for (const command of [
-			"npm ls",
-			"npm view typebox version",
-			"npm audit",
-			"npm config get registry",
-			"npm --version",
-			"pnpm why x",
-			"node --version",
-			"python3 -V",
-			"go list ./...",
-			"go env GOPATH",
-			"cargo tree",
-			"gh pr view 42",
-			"gh run list",
-			"gh api repos/a/b/pulls",
-			"gh api -X GET repos/a/b",
-			"gh status",
-		])
-			allowed(command);
-		for (const command of [
-			"npm install",
-			"npm audit fix",
-			"npm config set x y",
-			"npm",
-			'node -e \'require("fs").rmSync("x")\'',
-			"python script.py",
-			"go env -w GOPATH=x",
-			"go build",
-			"gh pr merge 42",
-			"gh pr",
-			"gh api -X POST repos/a/b/issues",
-			"gh api --method=DELETE repos/a/b",
-			"gh api repos/a/b/issues -f title=x",
-			"gh browse",
-		])
-			blocked(command);
-	});
-
-	it("allows curl reads but not uploads or file output", () => {
-		allowed("curl -sSL https://example.com");
-		allowed("curl -H 'Accept: json' https://example.com");
-		blocked("curl -o page.html https://example.com", /curl -o/);
-		blocked("curl -sSLO https://example.com/x", /curl -O/);
-		blocked("curl --data x=1 https://example.com", /curl --data/);
-		blocked("curl -X POST https://example.com");
+			assert.ok(parseCommandLine(command).ok, command);
 	});
 });
 
-describe("blockReason", () => {
+describe("regressions from the review", () => {
+	it("refuses arguments that bash expands before the check could see them", () => {
+		blocked("find . {-exec,} sh -c 'touch x' \\;", /brace expansion/);
+		blocked("find . -exec$U sh -c 'touch x' \\;", /\$ is not allowed/);
+		blocked("awk $'BEGIN{sy\\x73tem(\"touch x\")}'", /\$ is not allowed/);
+		blocked("sed -{i,} s/a/b/ f", /brace expansion/);
+		blocked("git log --out{put,}=x", /brace expansion/);
+		blocked("curl -$O https://x", /\$ is not allowed/);
+		blocked("sort -${o} x f", /\$ is not allowed/);
+	});
+
+	it("refuses printf -v, test -v and assignments", () => {
+		blocked("printf -v 'a[$(touch x)]' x", /printf/);
+		blocked("printf -va x", /printf/);
+		blocked("test -v 'a[$(touch x)]'", /test -v/);
+		blocked("[ -v 'a[$(touch x)]' ]", /\[ -v/);
+		blocked("test -R x", /test -R/);
+		blocked("TZ=UTC", /assignments/);
+		blocked("TZ=UTC date", /assignments/);
+		blocked("NO_COLOR=1 git log", /assignments/);
+		blocked("a[0]=1", /assignments/);
+		blocked("X+=1 ls", /assignments/);
+	});
+
+	it("refuses git ls-remote and gh api methods in any spelling", () => {
+		blocked("git ls-remote --upload-pack='sh -c touch' .", /git ls-remote/);
+		blocked("gh api -XDELETE repos/o/r", /only GET/);
+		blocked("gh api -X DELETE repos/o/r", /only GET/);
+		blocked("gh api --method=PATCH repos/o/r", /only GET/);
+		blocked("gh api --method PUT repos/o/r", /only GET/);
+		blocked("gh api -iXPOST repos/o/r", /only GET/);
+		blocked("gh api -H 'X-HTTP-Method-Override: DELETE' repos/o/r", /headers/);
+		blocked("gh api graphql", /graphql/);
+	});
+
+	it("refuses allowed commands that still write files or run programs", () => {
+		blocked("xxd in out", /xxd is not a read-only command/);
+		blocked("cloc --report-file=x .", /cloc/);
+		blocked("yq -s '.a' x.yaml", /yq -s/);
+		blocked("file -C -m magic", /file -C/);
+		blocked("curl --etag-save e https://x", /curl --etag-save/);
+		blocked("curl --hsts h https://x", /curl --hsts/);
+		blocked("curl --alt-svc a https://x", /curl --alt-svc/);
+		blocked("bat --pager='sh -c x' f", /bat --pager/);
+		blocked("bat --paging=always f", /paging=never/);
+		blocked("ag --pager=sh x", /ag is not a read-only command/);
+		blocked("ack --pager=sh x", /ack is not a read-only command/);
+		blocked("rg --hostname-bin=sh x", /rg --hostname-bin/);
+		blocked("rg --pre=sh x", /rg --pre/);
+		blocked("awk -l x '{print}'", /awk -l/);
+		blocked("awk -E x.awk", /awk -E/);
+		blocked("go env -w GOFLAGS=-x", /go env -w/);
+		blocked("go env -u GOFLAGS", /go env -u/);
+	});
+
+	it("refuses GNU long-option abbreviations", () => {
+		blocked("sort --outp=f x", /sort --outp/);
+		blocked("sed --in-pl s/a/b/ f", /sed --in-pl/);
+		blocked("git log --outp=x", /git log --outp/);
+		blocked("git diff --out=x", /git diff --out/);
+		blocked("git log --onel", /write the full option name: git log --oneline/);
+		blocked("rg --hostn=sh x", /rg --hostn/);
+		blocked("npm ls --glo", /write the full option name/);
+	});
+});
+
+describe("attacks", () => {
+	for (const [command, reason] of ATTACKS) it(`blocks ${JSON.stringify(command)}`, () => blocked(command, reason));
+});
+
+describe("legitimate commands", () => {
+	for (const command of LEGIT) it(`allows ${JSON.stringify(command)}`, () => allowed(command));
+});
+
+describe("reasons", () => {
+	it("explains a blocked bash command", () => {
+		assert.match(
+			blockReason("bash", { command: "ls && rm x" })!,
+			/^Blocked: rm is not a read-only command; describe the change in the design instead\. Only read-only commands run in architect mode/,
+		);
+	});
+
+	it("points to the allowed alternative", () => {
+		blocked("less f", /use the read tool/);
+		blocked("xxd f", /use od or hexdump/);
+		blocked("git log --onel", /git log --oneline/);
+		blocked("git reflog main", /use git reflog show main/);
+		blocked("sort *", /quote "\*"/);
+		blocked("awk '$1 > 5' f", /compare with < instead of >/);
+	});
+
 	it("blocks edit, write and powershell with a hint", () => {
 		assert.match(blockReason("edit", {})!, /edit is off in architect mode.*\/architect build/);
 		assert.match(blockReason("write", {})!, /write is off/);
@@ -311,13 +217,5 @@ describe("blockReason", () => {
 	it("passes other tools and read-only bash", () => {
 		assert.equal(blockReason("read", { path: "x" }), undefined);
 		assert.equal(blockReason("bash", { command: "ls" }), undefined);
-		assert.equal(blockReason("bash", {}), undefined);
-	});
-
-	it("explains a blocked bash command", () => {
-		assert.match(
-			blockReason("bash", { command: "ls && rm x" })!,
-			/^Blocked: rm is not a read-only command\. Only read-only commands run in architect mode/,
-		);
 	});
 });
