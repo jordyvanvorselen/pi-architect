@@ -140,6 +140,22 @@ describe("decision card layout", () => {
 		assert.ok(roomy.some((l) => l.includes("┌─ B")));
 	});
 
+	it("measures the rows Pi's loader, widgets and footer leave it, and folds when they leave too few", () => {
+		const block = (n: number) => ({ render: () => Array.from({ length: n }, () => ""), invalidate() {} });
+		const slot = { children: [] as unknown[], render: () => [], invalidate() {} };
+		const open = (chrome: number) => {
+			const tui = { requestRender() {}, terminal: { rows: 30 }, children: [block(99), block(chrome), slot] };
+			const c = new DecisionCard(tui as never, plainTheme, { decision: DECISION }, () => {}, { graceMs: 0 });
+			slot.children = [c];
+			return plain(c.render(100));
+		};
+		assert.ok(
+			open(2).some((l) => l.includes("┌─ B")),
+			"cards side by side with room to spare",
+		);
+		assert.ok(!open(12).some((l) => l.includes("┌─ B")), "a list when Pi's chrome takes 12 rows");
+	});
+
 	it("leaves out what it does not know", () => {
 		const bare = renderDecision(
 			{ decision: { id: "q1", question: "Q?", options: DECISION.options.slice(0, 2) }, focus: 1, mode: "browse" },

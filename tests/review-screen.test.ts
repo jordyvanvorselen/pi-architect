@@ -13,6 +13,8 @@ import type { ScreenOptions } from "../src/ui/screen-options.ts";
 import { moduleTree } from "../src/ui/review/explore.ts";
 import { createPhaseReview, phaseReview, REVIEW_BODIES, renderReview, ReviewScreen } from "../src/ui/review/index.ts";
 import { reviewGeometry } from "../src/ui/review/screen.ts";
+import { FALLBACK_CHROME, TRANSCRIPT_ROWS } from "../src/ui/room.ts";
+import { fullArchitecture } from "./fixtures/plan/architecture.ts";
 import { sliceOrder } from "../src/ui/review/slice.ts";
 import { paintLine, sp } from "../src/ui/spans.ts";
 import { ENTRY_TYPE, event, type EventInput } from "../src/state/events.ts";
@@ -139,6 +141,56 @@ describe("phase review screens", () => {
 			assertFits((w) => s.component.render(w), [30, 40, 80, 120, 200]);
 			s.keys("r", ...type("a long comment that wraps"));
 			assertFits((w) => s.component.render(w), [30, 40, 80, 120, 200]);
+		}
+	});
+
+	it("never draw a frame taller than the rows they have, so the bottom border stays on screen", () => {
+		const summary = "Four slices in build order. Check the order, the files and the verify commands of each.";
+		for (const phase of PHASES)
+			for (const width of [60, 80, 140])
+				for (const mode of ["browse", "changes"] as const)
+					for (let maxRows = 10; maxRows <= 45; maxRows++) {
+						const { inner } = reviewGeometry(width);
+						const body = REVIEW_BODIES[phase](ARCH, inner, plainTheme, { arch: ARCH, phase });
+						const editor = () => [[sp("─")], [sp("draft")], [sp("─")]];
+						const view = { phase, summary, body, scroll: 0, mode, editor, maxRows, board: true };
+						const lines = renderReview(view, width).lines.map((l) => paintLine(l, plainTheme));
+						const at = `${phase} ${mode} ${width}x${maxRows}`;
+						assert.ok(lines.length <= maxRows, `${at}: ${lines.length} rows`);
+						assert.match(lines.at(-1)!, /^╰.*╯$/, `${at}: bottom border`);
+					}
+	});
+
+	it("measure the rows Pi's loader, widgets and footer leave them, at 140x45, 80x24 and 60x30", () => {
+		const block = (n: number) => ({ render: () => Array.from({ length: n }, () => ""), invalidate() {} });
+		for (const [columns, rows] of [
+			[140, 45],
+			[80, 24],
+			[60, 30],
+		] as const) {
+			// Pi's children: transcript, pending messages, loader, widgets above, the editor slot, widgets below, footer.
+			const slot = { children: [] as unknown[], render: () => [], invalidate() {} };
+			const tui = {
+				requestRender() {},
+				terminal: { rows, columns },
+				children: [block(500), block(1), block(2), block(2), slot, block(0), block(4)],
+			};
+			const room = rows - TRANSCRIPT_ROWS - 9;
+			for (const phase of ["explore", "design", "slice", "blueprint"] as const) {
+				const c = new ReviewScreen(
+					tui as never,
+					plainTheme,
+					{ arch: { ...fullArchitecture(), phase }, phase, summary: "Check it." },
+					REVIEW_BODIES[phase],
+					() => {},
+				);
+				slot.children = [c];
+				const lines = plain(c.render(columns));
+				const at = `${phase} at ${columns}x${rows}`;
+				if (phase === "slice" || phase === "blueprint") assert.equal(lines.length, room, at);
+				else assert.ok(lines.length <= room, at);
+				assert.match(lines.at(-1)!, /^╰.*╯$/);
+			}
 		}
 	});
 
@@ -329,7 +381,7 @@ describe("phase review screens", () => {
 
 	it("colours the markers and the scrollbar with the theme", () => {
 		const c = new ReviewScreen(
-			{ requestRender() {}, terminal: { rows: 14 } } as never,
+			{ requestRender() {}, terminal: { rows: 24 } } as never,
 			tagTheme,
 			{ arch: ARCH, phase: "explore" },
 			REVIEW_BODIES.explore,
@@ -354,9 +406,9 @@ describe("phase review screens", () => {
 
 describe("phase review keys", () => {
 	it("scrolls long bodies with arrows, pages, home and end, and shows where it is", () => {
-		const s = screen("slice", ARCH, 20);
+		const s = screen("slice", ARCH, 24);
 		let lines = s.lines(80);
-		assert.equal(lines.length, 16);
+		assert.equal(lines.length, 24 - TRANSCRIPT_ROWS - FALLBACK_CHROME);
 		assert.match(lines.at(-1)!, /↓ \d+ more ─╯$/);
 		assert.ok(
 			lines.some((l) => l.endsWith("┃")),
@@ -479,10 +531,17 @@ describe("the review screen entry point", () => {
 		});
 	});
 
-	it("keeps a minimum viewport on short terminals and caps the width", () => {
+	it("gives up the summary, then body rows, on short terminals, and caps the width", () => {
 		const body = Array.from({ length: 50 }, (_, i) => [sp(`line ${i}`)]);
+		const summary = "Check the scope.";
+		const roomy = renderReview({ phase: "frame", body, summary, scroll: 0, mode: "browse", maxRows: 12 }, 80);
+		assert.ok(roomy.lines.some((l) => paintLine(l, plainTheme).includes(summary)));
+		const short = renderReview({ phase: "frame", body, summary, scroll: 0, mode: "browse", maxRows: 8 }, 80);
+		assert.ok(!short.lines.some((l) => paintLine(l, plainTheme).includes(summary)), "the summary goes first");
+		assert.equal(short.viewport, 4);
 		const layout = renderReview({ phase: "frame", body, scroll: 99, mode: "browse", maxRows: 5 }, 300);
-		assert.equal(layout.viewport, 3);
+		assert.equal(layout.lines.length, 5);
+		assert.equal(layout.viewport, 1);
 		assert.equal(layout.scroll, layout.maxScroll);
 		assert.equal(paintLine(layout.lines[0]!, plainTheme).length, 120);
 		assert.equal(reviewGeometry(50).padX, 1);

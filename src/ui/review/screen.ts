@@ -18,7 +18,10 @@ export interface ReviewView {
 	board?: boolean;
 	/** The inline editor's lines at a width, in `changes` mode. */
 	editor?: (width: number) => Line[];
-	/** Rows the screen may use. Longer bodies scroll. */
+	/**
+	 * Rows the screen may use. Longer bodies scroll; when even that does not fit, the summary goes and the
+	 * body keeps one row. The frame is never taller, down to 10 rows.
+	 */
 	maxRows?: number;
 }
 
@@ -32,7 +35,7 @@ export interface ReviewLayout {
 
 /** The review screen never gets wider than this, so text lines stay readable. */
 export const MAX_REVIEW_WIDTH = 120;
-/** Body rows the screen keeps in view even on a short terminal. */
+/** Body rows below which the summary gives up its rows to the body. */
 const MIN_VIEWPORT = 3;
 
 /** Frame width, side padding and content width of the screen at `total` columns. */
@@ -93,18 +96,23 @@ export function renderReview(view: ReviewView, total: number): ReviewLayout {
 		sp(PHASE_LABEL[view.phase], "text", true),
 		sp(` ${phaseIndex(view.phase) + 1}/${PHASES.length}`, "dim"),
 	];
-	const head: Line[] = [edge(width, "round", "border", "top", title, view.feature ? [sp(view.feature, "dim")] : [])];
+	const top = edge(width, "round", "border", "top", title, view.feature ? [sp(view.feature, "dim")] : []);
+	const summary: Line[] = [];
 	if (view.summary) {
-		head.push(row([]));
-		for (const line of wrap(view.summary, inner - 2)) head.push(row([sp("▍ ", "accent"), sp(line, "muted")]));
-		head.push(rule(width, "border"));
+		summary.push(row([]));
+		for (const line of wrap(view.summary, inner - 2)) summary.push(row([sp("▍ ", "accent"), sp(line, "muted")]));
+		summary.push(rule(width, "border"));
 	}
+	let head: Line[] = [top, ...summary];
 	const body = [[], ...view.body, []];
 	const foot = (scrollable: boolean) => footer(view, inner, scrollable);
 	const chrome = (scrollable: boolean) => head.length + 1 + foot(scrollable).length + 1;
 	let viewport = body.length;
-	if (view.maxRows !== undefined && body.length + chrome(false) > view.maxRows)
-		viewport = Math.min(body.length, Math.max(MIN_VIEWPORT, view.maxRows - chrome(true)));
+	if (view.maxRows !== undefined && body.length + chrome(false) > view.maxRows) {
+		// On a short terminal the summary makes room for the body first.
+		if (summary.length && view.maxRows - chrome(true) < MIN_VIEWPORT) head = [top];
+		viewport = Math.min(body.length, Math.max(1, view.maxRows - chrome(true)));
+	}
 	const scrollable = viewport < body.length;
 	const maxScroll = body.length - viewport;
 	const scroll = Math.min(Math.max(0, view.scroll), maxScroll);

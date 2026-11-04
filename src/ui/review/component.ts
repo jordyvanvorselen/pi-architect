@@ -5,16 +5,14 @@ import { InlineEditor } from "../inline-editor.ts";
 import type { Paint } from "../paint.ts";
 import type { ScreenOptions } from "../screen-options.ts";
 import { paintLine, type Line } from "../spans.ts";
+import { inlineRoom } from "../room.ts";
 import type { ReviewBody } from "./common.ts";
 import { renderReview, reviewGeometry, type ReviewMode } from "./screen.ts";
 
-/** Rows kept free above the screen, so the transcript stays in view. */
-const SPARE_ROWS = 4;
-
 /**
- * The interactive Phase Review screen. ↑/↓, PgUp/PgDn and Home/End scroll; ↵ approves; `r` opens an inline
- * editor for the requested changes; `b` opens the board over the screen; esc steps back from the editor or
- * closes the screen. Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
+ * The interactive Phase Review screen. ↑/↓ (or j/k), PgUp/PgDn (or space), Home and End scroll; ↵ approves;
+ * `r` opens an inline editor for the requested changes; `b` opens the board over the screen. esc steps back
+ * from the editor or closes the screen. Right after the screen opens, ↵ and `r` are ignored for a moment (see `InputGrace`).
  * Calls `done` once, with the verdict or undefined.
  */
 export class ReviewScreen implements Component, Focusable {
@@ -31,7 +29,7 @@ export class ReviewScreen implements Component, Focusable {
 	private viewport = 10;
 	private maxScroll = 0;
 	private bodyCache: { width: number; lines: Line[] } | undefined;
-	private cache: { width: number; lines: string[] } | undefined;
+	private cache: { width: number; rows: number; lines: string[] } | undefined;
 	private hasFocus = false;
 	private readonly grace: InputGrace;
 	private readonly board: (() => void) | undefined;
@@ -122,7 +120,9 @@ export class ReviewScreen implements Component, Focusable {
 	}
 
 	render(width: number): string[] {
-		if (this.cache?.width === width) return this.cache.lines;
+		// The room changes with Pi's chrome, e.g. when the loader or a queued message shows.
+		const rows = Math.max(10, inlineRoom(this.tui, this, width));
+		if (this.cache?.width === width && this.cache.rows === rows) return this.cache.lines;
 		const { arch, phase, summary } = this.request;
 		const editor = this.editor;
 		const layout = renderReview(
@@ -135,7 +135,7 @@ export class ReviewScreen implements Component, Focusable {
 				mode: this.mode,
 				board: this.board !== undefined,
 				...(editor ? { editor: (w: number) => editor.lines(w) } : {}),
-				maxRows: Math.max(12, this.tui.terminal.rows - SPARE_ROWS),
+				maxRows: rows,
 			},
 			width,
 		);
@@ -143,7 +143,7 @@ export class ReviewScreen implements Component, Focusable {
 		this.viewport = layout.viewport;
 		this.maxScroll = layout.maxScroll;
 		const lines = layout.lines.map((line) => paintLine(line, this.paint));
-		this.cache = { width, lines };
+		this.cache = { width, rows, lines };
 		return lines;
 	}
 
