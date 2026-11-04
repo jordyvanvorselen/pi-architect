@@ -852,6 +852,19 @@ describe("/architect board and ctrl+alt+b", () => {
 		assert.equal(ui.notifications.at(-1)!.message, "Queued 1 board comment for the agent's next step.");
 	});
 
+	it("opens one board when ctrl+alt+b comes twice before the first one shows", async () => {
+		const ui = new FakeUi().keys([KEYS.escape]);
+		const h = harness({ ui, branch: started() });
+		await h.fire("session_start", { reason: "resume" });
+		const first = h.shortcuts[BOARD_SHORTCUT]!(h.ctx);
+		const second = h.shortcuts[BOARD_SHORTCUT]!(h.ctx);
+		await Promise.all([first, second]);
+		assert.equal(ui.customs.length, 1);
+		ui.keys([KEYS.escape]);
+		await h.shortcuts[BOARD_SHORTCUT]!(h.ctx);
+		assert.equal(ui.customs.length, 2, "it opens again once closed");
+	});
+
 	it("redraws the open board when the agent changes the architecture", async () => {
 		const ui = new FakeUi();
 		const h = harness({ ui, branch: started() });
