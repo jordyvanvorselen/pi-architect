@@ -66,6 +66,9 @@ export function flagHelp(name: string, type: "boolean" | "string", text: string)
 /** Tools only architect mode needs. Every tool named `architect_*` counts, so later tools join automatically. */
 export const isArchitectTool = (name: string) => name.startsWith("architect_");
 
+/** What build mode brings back when nothing recorded what architect mode turned off. */
+const WRITE_TOOLS = ["edit", "write"];
+
 /** Test seams. Pi calls the factory with `pi` only. */
 export interface ArchitectOverrides {
 	/** Replaces the phase review screen. */
@@ -134,7 +137,10 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 			const late = active.filter((n) => !allowedInArchitect(n) && !known.has(n));
 			if (late.length) append({ type: "tools", turnedOff: late });
 		} else {
-			const back = (state.turnedOff ?? []).filter((n) => all.has(n));
+			// No record of what architect mode turned off, e.g. after /tree to before architect mode, while the
+			// architect tools are still on: the set comes from architect mode, so the write tools come back.
+			const leftover = state.turnedOff === undefined && active.some(isArchitectTool);
+			const back = (state.turnedOff ?? (leftover ? WRITE_TOOLS : [])).filter((n) => all.has(n));
 			next = [...new Set([...active.filter((n) => !isArchitectTool(n)), ...back])];
 		}
 		if (next.length !== active.length || next.some((n, i) => n !== active[i])) pi.setActiveTools(next);
