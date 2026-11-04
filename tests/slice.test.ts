@@ -203,14 +203,14 @@ describe("build order", () => {
 });
 
 describe("planSlices", () => {
-	it("replaces the slice list and answers with the build order", () => {
+	it("replaces the slice list and answers with the build order by build number and title", () => {
 		const plan = planSlices(at(), {
 			slices: [good("s1"), good("s2", ["s1"]), good("s3", ["s1"]), good("s4", ["s2", "s3"])],
 		});
 		assert.deepEqual(plan.event.replace, true);
 		assert.equal(
 			plan.text,
-			"Saved 4 slices. Build order: 1. s1 → 2. s2 + s3 → 3. s4. Slices joined by + can be built in parallel. " +
+			"Saved 4 slices. Build order: 1. Slice s1 → 2. Slice s2 + 3. Slice s3 → 4. Slice s4. Slices joined by + can be built in parallel. " +
 				"Slice is ready: call architect_advance when the user should review it.",
 		);
 		assert.deepEqual(plan.details.groups, [["s1"], ["s2", "s3"], ["s4"]]);
@@ -242,7 +242,7 @@ describe("planSlices", () => {
 		});
 		assert.equal(
 			plan.text,
-			"Saved 1 slice. Build order: 1. s1. Slice is ready: call architect_advance when the user should review it.",
+			"Saved 1 slice. Build order: 1. Store the key. Slice is ready: call architect_advance when the user should review it.",
 		);
 	});
 

@@ -241,8 +241,11 @@ export function planSlices(arch: Architecture, input: SliceInput, rejections?: R
 	const order = buildOrder(slices);
 	const groups: string[][] = [];
 	for (const o of order) (groups[o.step - 1] ??= []).push(o.slice.id);
+	// Build numbers and titles, as the user sees them on screen and in the plan, not the ids.
+	const named: string[][] = [];
+	for (const o of order) (named[o.step - 1] ??= []).push(`${o.number}. ${o.slice.title}`);
 	const gaps = missing({ ...arch, slices });
-	const steps = groups.map((g, i) => `${i + 1}. ${g.join(" + ")}`).join(" → ");
+	const steps = named.map((g) => g.join(" + ")).join(" → ");
 	const next = readiness(phase, gaps);
 	const parallel = groups.some((g) => g.length > 1) ? " Slices joined by + can be built in parallel." : "";
 	// Not errors: the plan still works, but the builder gets a better one when the agent fixes these.
