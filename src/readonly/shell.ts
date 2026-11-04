@@ -1,15 +1,19 @@
 /**
  * A small, strict shell lexer for the read-only check. It does not run or expand anything.
- * It splits a command line into simple commands and their redirections, and refuses the constructs
- * that could hide a write: command and process substitution, subshells, here-documents and background jobs.
+ * It splits a command line into simple commands and their redirections.
+ *
+ * Words must be literal: what the checker sees is what bash runs. So it refuses anything bash would expand
+ * before running the command: `$` in any form (variables, `$(…)`, `$'…'`, `$"…"`), backticks, brace expansion,
+ * `~user` and `~` after `=` or `:`, and process substitution. It also refuses subshells, here-documents and
+ * background jobs. Globs are kept and marked, so each command decides where it accepts them.
  * When in doubt it fails closed with a reason the model can act on.
  */
 
 export interface Word {
 	/** The word with quotes and escapes removed. */
 	value: string;
-	/** False when the word contains an unquoted or double-quoted `$` expansion, so its value is not known. */
-	literal: boolean;
+	/** True when the word has an unquoted `*`, `?` or `[…]`, so bash may replace it with file names. */
+	glob: boolean;
 }
 
 export interface Redirect {
@@ -25,24 +29,66 @@ export interface SimpleCommand {
 
 export type ParseResult = { ok: true; commands: SimpleCommand[] } | { ok: false; reason: string };
 
-const CONTROL = new Set(["&&", "||", ";", "|", "|&", "\n"]);
-
 type Token = { kind: "word"; word: Word } | { kind: "control"; op: string } | { kind: "redirect"; op: string };
 
 class Refusal extends Error {}
 
+const DOLLAR =
+	"$ is not allowed: no variables, $(…), $'…' or $\"…\". Write the value out; put text with $ in single quotes";
+const BACKTICK = "command substitution (`…`) is not allowed";
+
+const REDIRECT_OPS = ["<<<", "<<-", "&>>", ">>", ">|", ">&", "<&", "<<", "<>", "<(", ">(", "<", ">"];
+
+/** Builds a word and remembers which characters were unquoted, since only those can expand. */
+class WordBuilder {
+	value = "";
+	bare: boolean[] = [];
+	started = false;
+
+	add(text: string, unquoted: boolean): void {
+		for (let k = 0; k < text.length; k++) {
+			this.value += text[k];
+			this.bare.push(unquoted);
+		}
+		this.started = true;
+	}
+
+	/** The finished word. Refuses brace and tilde expansion, and marks globs. */
+	finish(): Word {
+		const { value, bare } = this;
+		const unquoted = (i: number, ch: string) => value[i] === ch && bare[i] === true;
+		let brace = false;
+		let list = false;
+		let glob = false;
+		for (let i = 0; i < value.length; i++) {
+			if (unquoted(i, "{")) brace = true;
+			if (unquoted(i, ",") || (unquoted(i, ".") && unquoted(i + 1, "."))) list = true;
+			if (unquoted(i, "*") || unquoted(i, "?")) glob = true;
+			if (unquoted(i, "[") && value.indexOf("]", i + 1) !== -1) glob = true;
+			if (unquoted(i, "~")) {
+				const start = i === 0 && (value.length === 1 || value[1] === "/");
+				if (i === 0 && !start) throw new Refusal(`"${value}": only ~ and ~/path are allowed; write the path out`);
+				if (i > 0 && (value[i - 1] === "=" || value[i - 1] === ":"))
+					throw new Refusal(`"${value}": ~ after = or : expands to a path; write the path out or quote the ~`);
+			}
+		}
+		if (brace && list)
+			throw new Refusal(`brace expansion is not allowed ("${value}"); write each word out or quote the braces`);
+		return { value, glob };
+	}
+}
+
 function lex(input: string): Token[] {
+	// eslint-disable-next-line no-control-regex
+	const control = /[\x00-\x08\x0b-\x1f\x7f]/.exec(input);
+	if (control) throw new Refusal("control characters (like \\r) are not allowed; use plain spaces and newlines");
 	const tokens: Token[] = [];
-	let value = "";
-	let literal = true;
-	let started = false;
+	let word = new WordBuilder();
 	let i = 0;
 
 	const flush = () => {
-		if (started) tokens.push({ kind: "word", word: { value, literal } });
-		value = "";
-		literal = true;
-		started = false;
+		if (word.started) tokens.push({ kind: "word", word: word.finish() });
+		word = new WordBuilder();
 	};
 
 	while (i < input.length) {
@@ -54,71 +100,52 @@ function lex(input: string): Token[] {
 			i++;
 			continue;
 		}
-		if (c === "\n" || c === "\r") {
+		if (c === "\n") {
 			flush();
 			tokens.push({ kind: "control", op: "\n" });
 			i++;
 			continue;
 		}
-		if (c === "#" && !started) {
+		if (c === "#" && !word.started) {
 			while (i < input.length && input[i] !== "\n") i++;
 			continue;
 		}
 		if (c === "\\") {
 			if (next === undefined) throw new Refusal("the command ends with a backslash");
 			i += 2;
-			if (next === "\n") continue;
-			value += next;
-			started = true;
+			if (next !== "\n") word.add(next, false);
 			continue;
 		}
 		if (c === "'") {
 			const end = input.indexOf("'", i + 1);
 			if (end === -1) throw new Refusal("a single quote is not closed");
-			value += input.slice(i + 1, end);
-			started = true;
+			word.add(input.slice(i + 1, end), false);
 			i = end + 1;
 			continue;
 		}
 		if (c === '"') {
 			i++;
-			started = true;
+			let text = "";
 			for (;;) {
 				if (i >= input.length) throw new Refusal("a double quote is not closed");
 				const d = input[i]!;
 				if (d === '"') break;
-				if (d === "`" || (d === "$" && input[i + 1] === "(")) throw new Refusal("command substitution is not allowed");
-				if (d === "$") literal = false;
+				if (d === "`") throw new Refusal(BACKTICK);
+				if (d === "$") throw new Refusal(DOLLAR);
 				if (d === "\\" && i + 1 < input.length && '"\\$`\n'.includes(input[i + 1]!)) {
-					if (input[i + 1] !== "\n") value += input[i + 1];
+					if (input[i + 1] !== "\n") text += input[i + 1];
 					i += 2;
 					continue;
 				}
-				value += d;
+				text += d;
 				i++;
 			}
+			word.add(text, false);
 			i++;
 			continue;
 		}
-		if (c === "`") throw new Refusal("command substitution is not allowed");
-		if (c === "$") {
-			if (next === "(") throw new Refusal("command substitution is not allowed");
-			if (next === "'") {
-				// ANSI-C quoting: $'...' with backslash escapes. The value is only used for allowlist checks.
-				let j = i + 2;
-				while (j < input.length && input[j] !== "'") j += input[j] === "\\" ? 2 : 1;
-				if (j >= input.length) throw new Refusal("a single quote is not closed");
-				value += input.slice(i + 2, j);
-				started = true;
-				i = j + 1;
-				continue;
-			}
-			literal = false;
-			value += c;
-			started = true;
-			i++;
-			continue;
-		}
+		if (c === "`") throw new Refusal(BACKTICK);
+		if (c === "$") throw new Refusal(DOLLAR);
 		if (c === "(" || c === ")") throw new Refusal("subshells and command groups are not allowed");
 		if (c === "&" || c === "|" || c === ";") {
 			flush();
@@ -142,23 +169,20 @@ function lex(input: string): Token[] {
 		}
 		if (c === "<" || c === ">") {
 			// A number right before the operator is its file descriptor, as in 2>/dev/null.
-			if (started && literal && /^\d+$/.test(value)) {
-				value = "";
-				started = false;
-			} else flush();
+			if (word.started && /^\d+$/.test(word.value) && word.bare.every(Boolean)) word = new WordBuilder();
+			else if (word.started && word.value.endsWith("}"))
+				throw new Refusal("named file descriptors ({name}>…) are not allowed");
+			else flush();
 			const rest = input.slice(i);
-			const op = ["<<<", "<<-", "&>>", ">>", ">|", ">&", "<&", "<<", "<>", "<(", ">(", "<", ">"].find((o) =>
-				rest.startsWith(o),
-			)!;
+			const op = REDIRECT_OPS.find((o) => rest.startsWith(o))!;
 			if (op === "<(" || op === ">(") throw new Refusal("process substitution is not allowed");
-			if (op === "<<" || op === "<<-") throw new Refusal("here-documents are not allowed");
+			if (op === "<<" || op === "<<-") throw new Refusal("here-documents are not allowed; use <<< 'text' instead");
 			if (op === "<>") throw new Refusal("opening a file for writing is not allowed");
 			tokens.push({ kind: "redirect", op });
 			i += op.length;
 			continue;
 		}
-		value += c;
-		started = true;
+		word.add(c, true);
 		i++;
 	}
 	flush();
@@ -182,10 +206,8 @@ export function parseCommandLine(input: string): ParseResult {
 	};
 	for (let i = 0; i < tokens.length; i++) {
 		const token = tokens[i]!;
-		if (token.kind === "control") {
-			if (!CONTROL.has(token.op)) return { ok: false, reason: `"${token.op}" is not allowed` };
-			end();
-		} else if (token.kind === "redirect") {
+		if (token.kind === "control") end();
+		else if (token.kind === "redirect") {
 			const target = tokens[i + 1];
 			if (target?.kind !== "word") return { ok: false, reason: `"${token.op}" has no target` };
 			current.redirects.push({ op: token.op, target: target.word });
