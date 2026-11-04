@@ -4,11 +4,12 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import { type DiagramFinding, diagramMaxWidth, DiagramSchema, validateDiagram } from "../diagram/index.ts";
-import type { DiagramEvent, EventInput } from "../state/events.ts";
+import type { DiagramEvent } from "../state/events.ts";
 import { PHASE_LABEL, phaseIndex, type Phase } from "../state/phases.ts";
 import { missing, nextId } from "../state/queries.ts";
-import type { ArchitectState, Architecture, Diagram } from "../state/types.ts";
+import type { Architecture, Diagram } from "../state/types.ts";
 import { diagramCall, diagramResult } from "../ui/diagram.ts";
+import { architecture, parseJson, readiness, type ToolDeps } from "./common.ts";
 
 export const DiagramParams = Type.Object(
 	{
@@ -27,15 +28,6 @@ export type DiagramInput = Static<typeof DiagramParams>;
 /** Phases with diagrams: Explore sketches what exists, Design draws the change, later phases fix gaps. */
 export function diagramsAllowed(phase: Phase): boolean {
 	return phaseIndex(phase) >= phaseIndex("explore");
-}
-
-function parseJson(value: unknown): unknown {
-	if (typeof value !== "string" || !/^\s*\{/.test(value)) return value;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return value;
-	}
 }
 
 const BODY_ALIASES = ["diagram", "drawing", "text", "content", "ascii", "unicode"];
@@ -137,10 +129,7 @@ export function planDiagram(
 		{ ...arch, diagrams: [...arch.diagrams.filter((d) => d.id !== diagram.id), diagram] },
 		options.has,
 	);
-	const label = PHASE_LABEL[phase];
-	const next = gaps.length
-		? `${label} still needs ${gaps.join(", ")}.`
-		: `${label} is ready: call architect_advance when the user should review it.`;
+	const next = readiness(phase, gaps);
 	const warnings = check.warnings ? ` ${check.summary.split("\n").slice(1).join("\n")}` : "";
 	const verb = old ? `Replaced diagram ${diagram.id}` : `Saved diagram ${diagram.id}`;
 	return {
@@ -159,10 +148,8 @@ export function planDiagram(
 	};
 }
 
-export interface DiagramToolDeps {
-	state(): ArchitectState;
-	append(event: EventInput): void;
-	has(tool: string): boolean;
+export interface DiagramToolDeps extends ToolDeps {
+	has?(tool: string): boolean;
 }
 
 /** Register `architect_diagram`. */
@@ -182,11 +169,8 @@ export function registerDiagramTool(pi: ExtensionAPI, deps: DiagramToolDeps): vo
 		defaultActive: false,
 		prepareArguments: prepareDiagramArgs,
 		async execute(_toolCallId, params) {
-			const state = deps.state();
-			const arch = state.architecture;
-			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_diagram only works in architect mode. The user switches with /architect.");
-			const plan = planDiagram(arch, params, { has: deps.has });
+			const arch = architecture(deps.state(), "architect_diagram");
+			const plan = planDiagram(arch, params, deps.has ? { has: deps.has } : {});
 			if (!plan.event) return { content: [{ type: "text", text: plan.text }], details: plan.details, isError: true };
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };

@@ -1,11 +1,13 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { buildOrder, type Ordered } from "../plan/order.ts";
 import type { SlicesEvent } from "../state/events.ts";
 import { PHASE_LABEL, type Phase } from "../state/phases.ts";
 import { missing, sliceProblems } from "../state/queries.ts";
 import type { Architecture, Slice } from "../state/types.ts";
-
-const List = (description: string) => Type.Array(Type.String(), { description });
+import type { Paint } from "../ui/paint.ts";
+import { sliceCall, sliceResult } from "../ui/slice.ts";
+import { architecture, clean, List, parseJson, readiness, textOf, textRow, type ToolDeps } from "./common.ts";
 
 export const SliceParams = Type.Object(
 	{
@@ -32,15 +34,6 @@ export type SliceInput = Static<typeof SliceParams>;
 
 const ALIASES: Record<string, string> = { dependsOn: "depends_on", depends: "depends_on", after: "depends_on" };
 const LISTS = new Set(["depends_on", "files", "steps", "verify"]);
-
-function parseJson(value: unknown): unknown {
-	if (typeof value !== "string" || !/^\s*[[{]/.test(value)) return value;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return value;
-	}
-}
 
 function normalizeSlice(raw: unknown): unknown {
 	const value = parseJson(raw);
@@ -76,7 +69,6 @@ const PLACEHOLDER = /\b(?:tbd|todo|fixme)\b|\?\?\?|\.\.\.$|…$|\betc\.?$/i;
 const VAGUE_VERIFY =
 	/^(?:tests?(?: pass(?:es)?)?|it works|works|manual(?:ly)?(?: (?:check|test(?:ing)?|qa))?|check|verify|review|tbd|todo|n\/a|run (?:the )?tests?)\.?$/i;
 
-const clean = (items: readonly string[] | undefined) => (items ?? []).map((s) => s.trim()).filter(Boolean);
 const quote = (text: string) => JSON.stringify(text.length > 40 ? `${text.slice(0, 39)}…` : text);
 
 /** Problems with one step, or undefined when a builder can act on it. */
@@ -182,11 +174,8 @@ export function planSlices(
 	const groups: string[][] = [];
 	for (const o of order) (groups[o.step - 1] ??= []).push(o.slice.id);
 	const gaps = missing({ ...arch, slices }, has);
-	const label = PHASE_LABEL[phase];
 	const steps = groups.map((g, i) => `${i + 1}. ${g.join(" + ")}`).join(" → ");
-	const next = gaps.length
-		? `${label} still needs ${gaps.join(", ")}.`
-		: `${label} is ready: call architect_advance when the user should review it.`;
+	const next = readiness(phase, gaps);
 	const parallel = groups.some((g) => g.length > 1) ? " Slices joined by + can be built in parallel." : "";
 	return {
 		event: { type: "slices", slices, replace: true },
@@ -202,4 +191,40 @@ export function planSlices(
 		},
 		order,
 	};
+}
+
+/** Register `architect_slice`. Inactive by default, like every architect tool; architect mode turns it on. */
+export function registerSliceTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (tool: string) => boolean }): void {
+	pi.registerTool({
+		name: "architect_slice",
+		label: "Architect slice",
+		description:
+			"Define every slice of the plan and return at once with the build order. Each slice has an id, title, goal, " +
+			"depends_on (ids), files, concrete steps and exact verify commands. Replaces the earlier list, so send all " +
+			"slices each time. Fails with every problem when slices are vague, unverifiable or depend in a cycle.",
+		promptSnippet: "Define the buildable slices of the architect plan with their dependencies and verify commands",
+		promptGuidelines: [
+			"Use architect_slice in the Slice phase. A builder with no other context follows each step, so name the file, function or type in every step.",
+		],
+		parameters: SliceParams,
+		defaultActive: false,
+		prepareArguments: prepareSliceArgs,
+		async execute(_toolCallId, params) {
+			const plan = planSlices(architecture(deps.state(), "architect_slice"), params, deps.has);
+			deps.append(plan.event);
+			return { content: [{ type: "text", text: plan.text }], details: plan.details };
+		},
+		renderCall: (args, theme, context) => textRow(context, sliceCall(args, theme as Paint)),
+		renderResult: (result, { expanded }, theme, context) =>
+			textRow(
+				context,
+				sliceResult(
+					result.details as SliceDetails | undefined,
+					textOf(result.content),
+					expanded,
+					context.isError,
+					theme as Paint,
+				),
+			),
+	});
 }

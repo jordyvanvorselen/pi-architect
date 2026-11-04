@@ -1,15 +1,14 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Type, type Static } from "typebox";
 import type { DecisionAnswer, DecisionUi } from "../decision.ts";
-import { choiceSnapshot, type EventInput } from "../state/events.ts";
+import { choiceSnapshot } from "../state/events.ts";
 import { PHASE_LABEL } from "../state/phases.ts";
 import { nextId } from "../state/queries.ts";
 import type { ArchitectState, Decision, DecisionOption, Level } from "../state/types.ts";
 import { decideCall, decideResult } from "../ui/decision/rows.ts";
 import type { Paint } from "../ui/paint.ts";
+import { architecture, clean, List, parseJson, textOf, textRow, type ToolDeps } from "./common.ts";
 
-const List = (description: string) => Type.Array(Type.String(), { description });
 const Rating = (description: string) => Type.Integer({ minimum: 1, maximum: 5, description });
 
 export const DecideParams = Type.Object(
@@ -47,15 +46,6 @@ export const DecideParams = Type.Object(
 export type DecideInput = Static<typeof DecideParams>;
 
 const LETTERS = ["A", "B", "C", "D", "E", "F", "G", "H"];
-
-function parseJson(value: unknown): unknown {
-	if (typeof value !== "string" || !/^\s*[[{]/.test(value)) return value;
-	try {
-		return JSON.parse(value);
-	} catch {
-		return value;
-	}
-}
 
 const toList = (value: unknown) => {
 	const parsed = parseJson(value);
@@ -110,9 +100,7 @@ export interface DecideDetails {
 	total?: number;
 }
 
-export interface DecideDeps {
-	state(): ArchitectState;
-	append(event: EventInput): void;
+export interface DecideDeps extends ToolDeps {
 	ui: DecisionUi;
 }
 
@@ -122,14 +110,11 @@ export interface DecideResult {
 	terminate?: boolean;
 }
 
-const clean = (items: readonly string[] | undefined) => (items ?? []).map((s) => s.trim()).filter(Boolean);
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** The decision the input describes, with its id. Throws with a message for the model when the input is unusable. */
 export function planDecision(state: ArchitectState, input: DecideInput): Decision {
-	const arch = state.architecture;
-	if (state.mode !== "architect" || !arch)
-		throw new Error("architect_decide only works in architect mode. The user switches with /architect.");
+	const arch = architecture(state, "architect_decide");
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	if (arch.phase !== "decide")
 		throw new Error(
@@ -310,9 +295,6 @@ export async function decide(
 	return result(`The user chose ${chosen.id} "${chosen.title}" for ${decision.id}${deviates}${said}. ${next}`, details);
 }
 
-const textOf = (content: readonly { type: string; text?: string }[]) =>
-	content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("\n");
-
 /** Register `architect_decide`. Inactive by default, like every architect tool; architect mode turns it on. */
 export function registerDecideTool(pi: ExtensionAPI, deps: DecideDeps): void {
 	pi.registerTool({
@@ -334,14 +316,10 @@ export function registerDecideTool(pi: ExtensionAPI, deps: DecideDeps): void {
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
 			return decide(deps, params, signal, ctx);
 		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(decideCall(args, theme as Paint));
-			return text;
-		},
-		renderResult(result, { isPartial, expanded }, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
+		renderCall: (args, theme, context) => textRow(context, decideCall(args, theme as Paint)),
+		renderResult: (result, { isPartial, expanded }, theme, context) =>
+			textRow(
+				context,
 				decideResult(
 					result.details as DecideDetails | undefined,
 					textOf(result.content),
@@ -349,8 +327,6 @@ export function registerDecideTool(pi: ExtensionAPI, deps: DecideDeps): void {
 					expanded,
 					theme as Paint,
 				),
-			);
-			return text;
-		},
+			),
 	});
 }

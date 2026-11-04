@@ -1,11 +1,12 @@
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
 import { diagramRules, phaseGuidance, type ToolCheck } from "../prompt.ts";
 import type { ReviewUi } from "../review.ts";
-import type { EventInput } from "../state/events.ts";
 import { nextPhase, PHASE_LABEL, PHASES, phaseIndex, type Phase } from "../state/phases.ts";
 import { missing } from "../state/queries.ts";
-import type { ArchitectState } from "../state/types.ts";
+import type { Paint } from "../ui/paint.ts";
+import { advanceCall, advanceResult } from "../ui/tools.ts";
+import { architecture, textOf, textRow, type ToolDeps } from "./common.ts";
 
 export const AdvanceParams = Type.Object(
 	{
@@ -35,9 +36,7 @@ export interface AdvanceDetails {
 /** What writing the plan file gave: the path, or why it failed. */
 export type Finalized = { path: string } | { error: string };
 
-export interface AdvanceDeps {
-	state(): ArchitectState;
-	append(event: EventInput): void;
+export interface AdvanceDeps extends ToolDeps {
 	review: ReviewUi;
 	now(): number;
 	has: ToolCheck;
@@ -71,10 +70,7 @@ export async function advance(
 	signal: AbortSignal | undefined,
 	ctx: ExtensionContext,
 ): Promise<AdvanceResult> {
-	const state = deps.state();
-	const arch = state.architecture;
-	if (state.mode !== "architect" || !arch)
-		throw new Error("architect_advance only works in architect mode. The user switches with /architect.");
+	const arch = architecture(deps.state(), "architect_advance");
 	const phase = arch.phase;
 	const label = PHASE_LABEL[phase];
 	if (arch.approvedAt !== undefined) throw new Error("The plan is already approved. There is no next phase.");
@@ -162,4 +158,29 @@ export async function advance(
 		].join("\n"),
 		{ phase, outcome: "approved", next, ...(comment ? { comment } : {}) },
 	);
+}
+
+/** Register `architect_advance`. Inactive by default, like every architect tool; architect mode turns it on. */
+export function registerAdvanceTool(pi: ExtensionAPI, deps: AdvanceDeps): void {
+	pi.registerTool({
+		name: "architect_advance",
+		label: "Architect advance",
+		description:
+			"Ask the user to review the current architect phase, and wait. Approval moves to the next phase; " +
+			"otherwise you get the user's comment. When the phase is incomplete it fails at once with what is missing.",
+		promptSnippet: "Ask the user to review and approve the current architect phase",
+		promptGuidelines: [
+			"Call architect_advance when an architect phase is complete. The user approves every phase; never skip one.",
+		],
+		parameters: AdvanceParams,
+		defaultActive: false,
+		executionMode: "sequential",
+		execute: (_toolCallId, params, signal, _onUpdate, ctx) => advance(deps, params, signal, ctx),
+		renderCall: (args, theme, context) => textRow(context, advanceCall(args, theme as Paint)),
+		renderResult: (result, { isPartial }, theme, context) =>
+			textRow(
+				context,
+				advanceResult(result.details as AdvanceDetails | undefined, textOf(result.content), isPartial, theme as Paint),
+			),
+	});
 }
