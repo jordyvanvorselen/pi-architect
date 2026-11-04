@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 import { describe, it } from "node:test";
 import { ENTRY_TYPE, PLAN_DIR_FLAG, WIDGET_KEY, type ArchitectOverrides } from "../src/index.ts";
@@ -9,6 +8,7 @@ import { event, type EventInput } from "../src/state/events.ts";
 import { rebuild, reduce, INITIAL_STATE } from "../src/state/reducer.ts";
 import { harness, type BranchEntry } from "./harness.ts";
 import { FakeUi, plainTheme } from "./helpers.ts";
+import { tempDir } from "./temp.ts";
 
 const SLICE = {
 	id: "s1",
@@ -116,7 +116,7 @@ describe("writing the plan on Blueprint approval", () => {
 		assert.equal(rebuild(flagged.branch).plan!.path, join("plans", "dedupe.md"));
 
 		// A fresh directory, so earlier runs cannot fill it up with dedupe-2.md … dedupe-100.md.
-		const dir = mkdtempSync(join(tmpdir(), "pi-architect-plans-"));
+		const dir = tempDir("pi-architect-plans-");
 		const h = await approved({ overrides: { planDir: join(dir, "..", basename(dir)) } });
 		await h.command("architect", "plan write");
 		assert.equal(rebuild(h.branch).plan!.path, join(dir, "dedupe.md"));

@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { format } from "prettier";
@@ -12,6 +11,7 @@ import { displayPath, nextPlanPath, planFile, readPlan, writePlan } from "../src
 import { newArchitecture } from "../src/state/reducer.ts";
 import type { Architecture, Slice } from "../src/state/types.ts";
 import { fullArchitecture } from "./fixtures/plan/architecture.ts";
+import { tempDir } from "./temp.ts";
 
 const SNAPSHOT = new URL("./fixtures/plan/dedupe-panel-events.md", import.meta.url);
 const SESSION = "01a1a1cb-cb27-747e-9beb-a4bec3b9f2fe";
@@ -19,7 +19,7 @@ const SESSION = "01a1a1cb-cb27-747e-9beb-a4bec3b9f2fe";
 /** Prettier with the repository's markdown options. */
 const pretty = (md: string) => format(md, { parser: "markdown", useTabs: false, tabWidth: 2, printWidth: 120 });
 
-const tmp = () => mkdtemp(join(tmpdir(), "pi-architect-plan-"));
+const tmp = async () => tempDir("pi-architect-plan-");
 
 describe("renderPlan", () => {
 	it("matches the snapshot for a full architecture", async () => {
