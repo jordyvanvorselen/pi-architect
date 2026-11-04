@@ -60,8 +60,11 @@ function position(phase: Phase): string {
 	return `Phase ${phaseIndex(phase) + 1}/${PHASES.length}: ${PHASE_LABEL[phase]}`;
 }
 
+/** Which tools are on in architect mode, for the model. */
+export const ARCHITECT_TOOLS_ON = "only read, grep, find, ls, read-only bash and the architect tools are on";
+
 const RULES = [
-	"Architect mode is read-only: edit and write are off, and bash runs only read-only commands.",
+	`Architect mode is read-only: ${ARCHITECT_TOOLS_ON}.`,
 	"The extension shows the design on screen, so keep chat short.",
 ];
 
@@ -162,7 +165,7 @@ export function drawingRulesInContext(entries: readonly ContextEntry[], phase: P
 export function modeNotice(mode: Mode, arch: Architecture | undefined): string {
 	if (mode === "architect") {
 		const where = arch && arch.approvedAt === undefined ? ` Current phase: ${PHASE_LABEL[arch.phase]}.` : "";
-		return `[pi-architect] The user switched to architect mode. It is read-only: edit and write are off.${where}`;
+		return `[pi-architect] The user switched to architect mode. It is read-only: ${ARCHITECT_TOOLS_ON}.${where}`;
 	}
 	const plan = arch?.approvedAt !== undefined ? " Build from the approved plan." : "";
 	return `[pi-architect] The user switched to build mode. All tools are back and the architect tools are off.${plan}`;

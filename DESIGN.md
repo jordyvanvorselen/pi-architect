@@ -16,10 +16,10 @@ The result is a plan file that another agent can build from without any other co
 
 Every Pi session has a mode: **architect** or **build**. The user sets it. A new session starts in build mode, which is normal Pi.
 
-| Mode      | Tools                                                          | The agent                                              |
-| --------- | -------------------------------------------------------------- | ------------------------------------------------------ |
-| architect | Read-only. Edit and write are off. The architect tools are on. | Walks through the phases. The user approves each gate. |
-| build     | All normal tools. The architect tools are off.                 | Builds, from the approved plan if there is one.        |
+| Mode      | Tools                                                                                | The agent                                              |
+| --------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| architect | Read-only. Only read, grep, find, ls, read-only bash and the architect tools are on. | Walks through the phases. The user approves each gate. |
+| build     | All normal tools. The architect tools are off.                                       | Builds, from the approved plan if there is one.        |
 
 - `/architect` switches to architect mode. In architect mode it opens a picker: the board, a review of the phase, the plan, build mode or reset.
 - `/architect build` switches to build mode.
@@ -268,7 +268,7 @@ The completion lists the subcommands with a short description, and `open`, `writ
 
 ## Read-only in architect mode
 
-- Edit and write tools are off. Tools are an allowlist: read, grep, find, ls, bash and `architect_*`. Any other tool call, including tools from other extensions, is blocked with a reason that names the allowed tools and `/architect build`.
+- Tools are an allowlist: only read, grep, find, ls, bash and `architect_*` are on. Any other tool call, including tools from other extensions, is blocked with a reason that names the allowed tools and `/architect build`.
   Architect mode also turns every other tool off, so its schema is not sent, and build mode turns exactly those back on.
   The mode event records which tools it turned off, because Pi restores the tool set from the transcript after a reload. A tool that turns on later, like an MCP tool that registers late, is turned off at the start of the next turn, also in the middle of a run, and recorded too.
 - Each architect tool is only on in its phases: `architect_update` and `architect_advance` always, `architect_decide` in Decide, `architect_diagram` from Explore on and `architect_slice` in Slice and Blueprint.

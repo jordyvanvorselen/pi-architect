@@ -60,7 +60,10 @@ describe("architectSection", () => {
 			/^You are in architect mode, designing one feature before anyone builds it\. Feature: "Dedupe"\./,
 		);
 		assert.match(text, /\nPhase 2\/6: Explore\.\n- Read the code/);
-		assert.match(text, /Rules:\n- Architect mode is read-only/);
+		assert.match(
+			text,
+			/Rules:\n- Architect mode is read-only: only read, grep, find, ls, read-only bash and the architect tools are on\./,
+		);
 		assert.doesNotMatch(text, /skip/i);
 		const rules = text.split("\nDrawing diagrams")[0]!;
 		assert.ok(rules.length < 1200, `section is ${rules.length} characters without the drawing guide`);
@@ -83,7 +86,7 @@ describe("mode notices", () => {
 	it("are short and say what changed", () => {
 		assert.equal(
 			modeNotice("architect", at({ phase: "decide" })),
-			"[pi-architect] The user switched to architect mode. It is read-only: edit and write are off. Current phase: Decide.",
+			"[pi-architect] The user switched to architect mode. It is read-only: only read, grep, find, ls, read-only bash and the architect tools are on. Current phase: Decide.",
 		);
 		assert.doesNotMatch(modeNotice("architect", at({ approvedAt: 1 })), /Current phase/);
 		assert.equal(
