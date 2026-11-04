@@ -349,7 +349,7 @@ describe("phase review screens", () => {
 				entry({ type: "verdict", phase, verdict: "approved", at: 3 + i }),
 			),
 		];
-		const ui = new FakeUi().keys([KEYS.escape]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter]);
 		const h = harness({ ui, branch, builtins: ["read"] });
 		await h.fire("session_start", { reason: "resume" });
 		await h.call("architect_advance", {});
@@ -473,7 +473,27 @@ describe("phase review keys", () => {
 		s.component.focused = false;
 		assert.equal(s.component.focused, false);
 		s.component.focused = true;
-		s.keys(KEYS.escape, "x", KEYS.escape);
+		s.keys(KEYS.escape, "x", KEYS.escape, KEYS.enter);
+		assert.deepEqual(s.answers, [undefined]);
+	});
+
+	it("esc asks before closing without a verdict, because the agent stops: ↵ closes, esc goes back", () => {
+		const s = screen("slice", ARCH, 24);
+		s.lines(100);
+		s.keys(KEYS.down, KEYS.escape);
+		assert.equal(s.component.state.mode, "closing");
+		const lines = s.lines(100);
+		assert.match(lines.at(-2)!, /Close without a verdict\? The agent will stop\. {2}↵ close {2}esc back/);
+		assert.ok(s.lines(100).length <= 24 - TRANSCRIPT_ROWS - FALLBACK_CHROME, "still fits");
+		const narrow = s.lines(40).join("\n");
+		assert.match(narrow, /Close without a verdict\? The agent/);
+		assert.match(narrow, /↵ close {2}esc back/);
+		s.keys("r", KEYS.down, KEYS.pageDown);
+		assert.deepEqual(s.component.state, { scroll: 1, mode: "closing" }, "other keys wait for the answer");
+		s.keys(KEYS.escape);
+		assert.deepEqual(s.component.state, { scroll: 1, mode: "browse" });
+		assert.deepEqual(s.answers, []);
+		s.keys(KEYS.escape, KEYS.enter);
 		assert.deepEqual(s.answers, [undefined]);
 	});
 
@@ -511,7 +531,7 @@ describe("the review screen entry point", () => {
 
 	it("takes other bodies, e.g. the Blueprint screen", async () => {
 		const review = createPhaseReview({ blueprint: () => [[sp("THE BLUEPRINT")]] });
-		const ui = new FakeUi().keys([KEYS.escape]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter]);
 		assert.equal(await review({ arch: ARCH, phase: "blueprint" }, { mode: "tui", ui } as never), undefined);
 		assert.ok(ui.customs[0]!.frames[0]!.some((l) => l.includes("THE BLUEPRINT")));
 	});
@@ -606,9 +626,9 @@ describe("review screen grace period", () => {
 		assert.deepEqual(s.answers, [{ verdict: "changes", comment: "b" }]);
 	});
 
-	it("still closes with esc during the grace period", () => {
+	it("still closes with esc and ↵ during the grace period", () => {
 		const s = screen("frame", ARCH, 200, undefined, { now: () => 0 });
-		s.keys(KEYS.escape);
+		s.keys(KEYS.escape, KEYS.enter);
 		assert.deepEqual(s.answers, [undefined]);
 	});
 

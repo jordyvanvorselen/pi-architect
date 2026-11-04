@@ -1,8 +1,23 @@
 import { PHASE_LABEL, PHASES, phaseIndex, type Phase } from "../../state/phases.ts";
-import { boxRow, edge, hintLines, innerWidth, rule, sp, wrap, type Line, type Span } from "../spans.ts";
+import {
+	boxRow,
+	edge,
+	hintLines,
+	hints,
+	innerWidth,
+	lineWidth,
+	rule,
+	sp,
+	wrap,
+	type Line,
+	type Span,
+} from "../spans.ts";
 
-/** `browse`: reading and scrolling. `changes`: writing what should change in the inline editor. */
-export type ReviewMode = "browse" | "changes";
+/**
+ * `browse`: reading and scrolling. `changes`: writing what should change in the inline editor. `closing`:
+ * esc was pressed, and the screen asks before it closes without a verdict.
+ */
+export type ReviewMode = "browse" | "changes" | "closing";
 
 export interface ReviewView {
 	phase: Phase;
@@ -38,6 +53,9 @@ export const MAX_REVIEW_WIDTH = 120;
 /** Body rows below which the summary gives up its rows to the body. */
 const MIN_VIEWPORT = 3;
 
+/** What esc asks before the screen closes without a verdict. */
+export const CLOSE_QUESTION = "Close without a verdict? The agent will stop.";
+
 /** Frame width, side padding and content width of the screen at `total` columns. */
 export function reviewGeometry(total: number): { width: number; padX: number; inner: number } {
 	const width = Math.min(total, MAX_REVIEW_WIDTH);
@@ -47,6 +65,15 @@ export function reviewGeometry(total: number): { width: number; padX: number; in
 
 function footer(view: ReviewView, inner: number, scrollable: boolean): Line[] {
 	const label = PHASE_LABEL[view.phase];
+	if (view.mode === "closing") {
+		const keys = hints([
+			["↵", "close"],
+			["esc", "back"],
+		]);
+		const question = sp(CLOSE_QUESTION, "warning", true);
+		if (lineWidth([question]) + 2 + lineWidth(keys) <= inner) return [[question, sp("  "), ...keys]];
+		return [...wrap(CLOSE_QUESTION, inner).map((l) => [sp(l, "warning", true)]), keys];
+	}
 	if (view.mode === "changes")
 		return [
 			[sp(`What should change in ${label}?`, "accent", true)],

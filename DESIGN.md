@@ -21,7 +21,7 @@ Every Pi session has a mode: **architect** or **build**. The user sets it. A new
 | architect | Read-only. Edit and write are off. The architect tools are on. | Walks through the phases. The user approves each gate. |
 | build     | All normal tools. The architect tools are off.                 | Builds, from the approved plan if there is one.        |
 
-- `/architect` switches to architect mode. In architect mode it opens a picker: the board, the plan, build mode or reset.
+- `/architect` switches to architect mode. In architect mode it opens a picker: the board, a review of the phase, the plan, build mode or reset.
 - `/architect build` switches to build mode.
 - `ctrl+alt+a` toggles the mode. Pi does not bind this key.
 - `pi --architect` starts in architect mode.
@@ -131,7 +131,11 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 | Slice     | The slices in build order, with arrows, files, steps and verify       |
 | Blueprint | Everything on one page, and the path the plan file will be written to |
 
-Long screens scroll with ↑/↓, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board, esc closes.
+Long screens scroll with ↑/↓, PgUp/PgDn, space, Home and End. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
+
+esc closes the screen, but first asks in the bottom bar: `Close without a verdict? The agent will stop.  ↵ close  esc back`.
+A closed review tells the agent the user closed it, and the agent stops. `/architect review` opens the same review again, with the agent's summary.
+The verdict then goes to the agent as a message that starts its next turn.
 
 For 300 ms after the card or a screen opens, ↵ and the keys that choose, approve or open an editor do nothing. A ↵ meant for the chat editor then cannot choose or approve by accident. The arrows, `b` and esc still work.
 
@@ -236,19 +240,20 @@ The tools are only active in architect mode, so build mode does not pay for them
 
 ## User commands
 
-Every command lives under `/architect`. The first words `build`, `board`, `plan` and `reset` are reserved. Anything else names a feature.
+Every command lives under `/architect`. The first words `build`, `board`, `review`, `plan` and `reset` are reserved. Anything else names a feature.
 
-| Command                 | Does                                                                                            |
-| ----------------------- | ----------------------------------------------------------------------------------------------- |
-| `/architect`            | Switches to architect mode. In architect mode it opens a picker: board, plan, build mode, reset |
-| `/architect <feature>`  | Switches to architect mode and starts on a feature                                              |
-| `/architect build`      | Switches to build mode                                                                          |
-| `/architect board`      | Opens the board, the whole design on one screen. `ctrl+alt+b` does the same                     |
-| `/architect plan`       | Shows the plan path and progress, and offers the actions                                        |
-| `/architect plan open`  | Opens the plan file in the default app                                                          |
-| `/architect plan write` | Writes a missing plan file again                                                                |
-| `/architect plan build` | Starts a new session that builds the plan. It knows the plan, so it shows the progress          |
-| `/architect reset`      | Discards the architecture in this session, after a confirmation                                 |
+| Command                 | Does                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------------------------------- |
+| `/architect`            | Switches to architect mode. In architect mode it opens a picker: board, review, plan, build mode, reset |
+| `/architect <feature>`  | Switches to architect mode and starts on a feature                                                      |
+| `/architect build`      | Switches to build mode                                                                                  |
+| `/architect board`      | Opens the board, the whole design on one screen. `ctrl+alt+b` does the same                             |
+| `/architect review`     | Opens the review of the current phase, e.g. again after esc closed it                                   |
+| `/architect plan`       | Shows the plan path and progress, and offers the actions                                                |
+| `/architect plan open`  | Opens the plan file in the default app                                                                  |
+| `/architect plan write` | Writes a missing plan file again                                                                        |
+| `/architect plan build` | Starts a new session that builds the plan. It knows the plan, so it shows the progress                  |
+| `/architect reset`      | Discards the architecture in this session, after a confirmation                                         |
 
 `/architect plan` alone also offers "Build it here", which switches to build mode and asks the agent to build the plan, and "Copy the path".
 The completion lists the subcommands with a short description, and `open`, `write` and `build` after `plan`.
