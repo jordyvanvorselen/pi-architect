@@ -760,7 +760,7 @@ describe("architect_advance", () => {
 		await h.call("architect_update", { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } });
 		const result = await h.call("architect_advance", {});
 		const done = tool.renderResult!(result, { expanded: false, isPartial: false }, plainTheme, ctx);
-		assert.equal(stripTerminalSequences(done.render(60)[0]!).trimEnd(), "✓ Frame approved → Explore");
+		assert.deepEqual(done.render(60), [], "the verdict's banner says it, once");
 	});
 });
 

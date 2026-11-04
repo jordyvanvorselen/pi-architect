@@ -134,20 +134,11 @@ describe("tool rows", () => {
 		assert.equal(updateResult(undefined, "text", false, false, plainTheme), "text");
 	});
 
-	it("advance result shows each outcome", () => {
+	it("advance result shows each outcome, and leaves a verdict to its banner so it shows once", () => {
 		const r = (details: Parameters<typeof advanceResult>[0]) => advanceResult(details, "boom", false, plainTheme);
-		assert.equal(
-			r({ phase: "frame", outcome: "approved", next: "explore", comment: "ok" }),
-			'✓ Frame approved → Explore  "ok"',
-		);
-		assert.equal(
-			r({ phase: "blueprint", outcome: "approved", final: true }),
-			"✓ Blueprint approved · the plan is final",
-		);
-		assert.equal(
-			r({ phase: "frame", outcome: "changes", comment: "tighten" }),
-			'↻ changes requested for Frame  "tighten"',
-		);
+		assert.equal(r({ phase: "frame", outcome: "approved", next: "explore", comment: "ok" }), "");
+		assert.equal(r({ phase: "blueprint", outcome: "approved", final: true, planPath: "docs/plans/x.md" }), "");
+		assert.equal(r({ phase: "frame", outcome: "changes", comment: "tighten" }), "");
 		assert.equal(
 			r({ phase: "frame", outcome: "closed" }),
 			"■ Frame review closed without a verdict · /architect review opens it again",
