@@ -196,6 +196,11 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		state = rebuild(ctx.sessionManager.getBranch());
 		progress = undefined;
 		applyTools();
+		// Pi quit or the branch changed while a review was open: nobody waits for that review any more, so
+		// the phase goes back to working instead of staying in review for good.
+		const arch = state.architecture;
+		if (arch?.status === "review" && reviewing === 0 && ctx.isIdle())
+			append({ type: "withdraw", phase: arch.phase, at: now() });
 		refresh();
 	}
 
@@ -323,7 +328,17 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 
 	const tools = { state: () => state, append };
 	registerUpdateTool(pi, tools);
-	const gate = { ...tools, review, now, finalize: writePlanFile, planTarget };
+	/** Reviews open right now, so loading a branch does not withdraw one that a tool waits for. */
+	let reviewing = 0;
+	const watched: ReviewUi = async (request, ctx) => {
+		reviewing++;
+		try {
+			return await review(request, ctx);
+		} finally {
+			reviewing--;
+		}
+	};
+	const gate = { ...tools, review: watched, now, finalize: writePlanFile, planTarget };
 	registerAdvanceTool(pi, gate);
 	registerDiagramTool(pi, tools);
 	registerDecideTool(pi, { ...tools, ui: boards.guard(decideUi) });

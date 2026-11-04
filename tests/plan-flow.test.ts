@@ -189,13 +189,18 @@ describe("plan state", () => {
 			assert.equal(reduce(INITIAL_STATE, plan(bad)), INITIAL_STATE);
 	});
 
-	it("a new architecture or a reset drops the plan", () => {
+	it("a new architecture or a reset keeps the plan, whose file is still there to build", () => {
 		const withPlan = reduce(rebuild(approvedBranch()), plan({ path: "p", slug: "s", at: 1 }));
-		assert.equal(reduce(withPlan, event({ type: "begin", feature: "B", slug: "b", at: 4 })).plan, undefined);
-		assert.equal(reduce(withPlan, event({ type: "reset", at: 4 })).plan, undefined);
+		const begun = reduce(withPlan, event({ type: "begin", feature: "B", slug: "b", at: 4 }));
+		assert.equal(begun.plan!.path, "p");
+		assert.equal(begun.architecture!.feature, "B");
+		const reset = reduce(withPlan, event({ type: "reset", at: 4 }));
+		assert.equal(reset.plan!.path, "p");
+		assert.equal(reset.architecture!.approvedAt, undefined);
 		const build = reduce(withPlan, event({ type: "mode", mode: "build", at: 4 }));
-		assert.equal(build.plan!.path, "p");
-		assert.deepEqual(reduce(build, event({ type: "reset", at: 5 })), { mode: "build" });
+		const buildReset = reduce(build, event({ type: "reset", at: 5 }));
+		assert.equal(buildReset.architecture, undefined);
+		assert.equal(buildReset.plan!.path, "p");
 	});
 });
 
