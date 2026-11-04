@@ -284,10 +284,10 @@ describe("persistence", () => {
 		assert.match(ui.widgetLines(WIDGET_KEY)![0]!, /◆ ARCHITECT {2}Dedupe {2}● Frame/);
 	});
 
-	it("brings edit and write back in build mode after a reload restored the architect tool set", async () => {
+	it("brings edit and write back in build mode after a reload kept the architect tool set", async () => {
 		const first = await architecting();
 		await first.call("architect_update", { feature: "Dedupe" });
-		// Pi restores the tools of the last run from the transcript: the architect set, without edit and write.
+		// A reload keeps the tools of architect mode: the architect set, without edit and write.
 		const restored = first.active();
 		assert.ok(!restored.includes("edit") && !restored.includes("write"));
 		const second = harness({ ui: new FakeUi({ confirm: [true] }), branch: [...first.branch], activeTools: restored });
@@ -297,7 +297,7 @@ describe("persistence", () => {
 		assert.ok(!second.active().some((n) => n.startsWith("architect_")));
 	});
 
-	it("brings edit and write back when a reload lands in build mode with the architect tool set", async () => {
+	it("brings edit and write back when /tree lands in build mode with the architect tool set", async () => {
 		const first = await architecting();
 		const restored = first.active();
 		await first.command("architect", "build");
@@ -313,6 +313,18 @@ describe("persistence", () => {
 		const h = harness({ ui: new FakeUi(), branch: [], activeTools: restored });
 		await h.fire("session_tree", {});
 		assert.deepEqual(h.active().sort(), ["bash", "edit", "find", "grep", "ls", "read", "write"]);
+	});
+
+	it("turns the architect tools of other phases off again after a reload turned every extension tool on", async () => {
+		const first = await architecting();
+		const everyTool = [...new Set([...first.active(), ...Object.keys(first.tools)])];
+		const second = harness({ ui: new FakeUi(), branch: [...first.branch], activeTools: everyTool });
+		await second.fire("session_start", { reason: "reload" });
+		assert.deepEqual(
+			second.active().filter((n) => n.startsWith("architect_")),
+			["architect_update", "architect_advance"],
+		);
+		assert.ok(!second.active().includes("edit"));
 	});
 
 	it("keeps a write tool off in build mode when the user had it off before architect mode", async () => {
@@ -344,7 +356,7 @@ describe("persistence", () => {
 				.sort(),
 			["bash", "find", "grep", "ls", "read"],
 		);
-		// Pi restores the architect tool set after a reload; build mode still knows what to bring back.
+		// The architect tool set is still on after a reload; build mode still knows what to bring back.
 		const after = harness({ ui: new FakeUi(), builtins, branch: [...h.branch], activeTools: h.active() });
 		await after.fire("session_start", { reason: "reload" });
 		await after.command("architect", "build");

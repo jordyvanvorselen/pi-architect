@@ -121,8 +121,9 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 	 * Make the active tools fit the mode and the phase. Architect mode turns off every tool the read-only
 	 * allowlist does not allow, so their schemas are not sent, and the architect tools of the current phase on
 	 * (see `phaseTools`). Build mode turns the architect tools off and exactly the tools architect mode turned
-	 * off back on. Pi restores the tool set from the transcript after a reload, a resume or /tree, so this works
-	 * from the state alone and never from what it turned off in memory.
+	 * off back on. A reload keeps the current tools and turns on every extension tool, and a resume or /tree
+	 * restores the tool set from the transcript, so this works from the state alone and never from what it
+	 * turned off in memory.
 	 */
 	function applyTools(): void {
 		const active = pi.getActiveTools();
