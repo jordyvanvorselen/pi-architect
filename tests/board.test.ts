@@ -191,6 +191,18 @@ describe("board tabs", () => {
 		);
 	});
 
+	it("dims every inactive tab with nothing to show yet, the Risks tab too", () => {
+		const bar = (arch: Architecture) =>
+			board(architect(arch), { paint: tagTheme, columns: 140 })
+				.screen.render(140)
+				.find((l) => l.includes("Decisions"))!;
+		const early = bar({ ...sliceArch({ phase: "explore" }), risks: [], diagrams: [] });
+		assert.match(early, /<text>Brief<\/text>/);
+		for (const tab of ["Decisions", "Diagrams", "Risks", "Slices", "Plan"])
+			assert.match(early, new RegExp(`<dim>${tab}</dim>`), tab);
+		assert.match(bar(sliceArch({ phase: "explore" })), /<text>Risks<\/text><muted> 3<\/muted>/, "once there are risks");
+	});
+
 	it("dims an unreached tab's note and says when its phase comes", () => {
 		const arch = { ...newArchitecture(1, "Dedupe", "dedupe"), phase: "explore" as const };
 		const b = board(architect(arch));

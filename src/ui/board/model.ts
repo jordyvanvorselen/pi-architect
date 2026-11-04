@@ -148,8 +148,14 @@ export function summarize(data: BoardData, tab: BoardTab): TabSummary {
 		case "diagrams":
 			return { ...base, reached: base.reached || arch.diagrams.length > 0, count: arch.diagrams.length };
 		case "risks": {
+			// Risks have no phase of their own: like the other tabs, the tab is dim while it has nothing to show.
 			const high = arch.risks.filter((r) => r.severity === "high").length;
-			return { ...base, count: arch.risks.length, ...(high ? { extra: sp(`(${high} high)`, "error") } : {}) };
+			return {
+				...base,
+				reached: arch.approvedAt !== undefined || arch.risks.length > 0,
+				count: arch.risks.length,
+				...(high ? { extra: sp(`(${high} high)`, "error") } : {}),
+			};
 		}
 		case "slices": {
 			const progress = data.progress;
