@@ -12,13 +12,14 @@ export function sliceCall(args: Partial<SliceInput> | undefined, paint: Paint): 
 }
 
 /**
- * The build order, one group per line. Collapsed: the groups with ids. Expanded: titles too, and what
- * changed compared with the earlier list.
+ * The build order, one step per line, each slice by its build number as the plan file and the review
+ * screens show it. Collapsed: the numbers. Expanded: titles too, and what changed compared with the earlier
+ * list. A removed slice has no number any more, so it shows by id.
  * ```
  * ✓ 4 slices in 3 steps · Slice ready for review
- *   1  s1
- *   2  s2 ∥ s3
- *   3  s4
+ *   step 1  1
+ *   step 2  2 ∥ 3
+ *   step 3  4
  * ```
  */
 export function sliceResult(
@@ -36,17 +37,22 @@ export function sliceResult(
 		: paint.fg("success", `${label} ready for review`);
 	const head = `${paint.fg("success", "✓")} ${paint.fg("muted", `${plural(count, "slice")} in ${plural(details.groups.length, "step")}`)} ${paint.fg("dim", "·")} ${state}`;
 	const bar = paint.fg("dim", " ∥ ");
+	const numbers = new Map(details.groups.flat().map((id, i) => [id, String(i + 1)]));
+	const numberOf = (id: string) => numbers.get(id) ?? id;
 	const lines = details.groups.map((group, i) => {
 		const names = group.map((id) =>
-			expanded ? `${paint.fg("accent", id)} ${paint.fg("text", details.titles[id] ?? "")}` : paint.fg("accent", id),
+			expanded
+				? `${paint.fg("accent", numberOf(id))} ${paint.fg("text", details.titles[id] ?? "")}`
+				: paint.fg("accent", numberOf(id)),
 		);
-		return `  ${paint.fg("dim", String(i + 1).padStart(2))}  ${names.join(bar)}`;
+		return `  ${paint.fg("dim", `step ${i + 1}`)}  ${names.join(bar)}`;
 	});
 	if (expanded) {
+		const list = (ids: readonly string[]) => ids.map(numberOf).join(", ");
 		const delta = [
-			details.added.length ? `+ ${details.added.join(", ")}` : "",
-			details.changed.length ? `~ ${details.changed.join(", ")}` : "",
-			details.removed.length ? `− ${details.removed.join(", ")}` : "",
+			details.added.length ? `+ ${list(details.added)}` : "",
+			details.changed.length ? `~ ${list(details.changed)}` : "",
+			details.removed.length ? `− ${list(details.removed)}` : "",
 		].filter(Boolean);
 		if (delta.length) lines.push(`  ${paint.fg("dim", delta.join("  "))}`);
 	}

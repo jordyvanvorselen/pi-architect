@@ -5,7 +5,7 @@ export interface BoardComment {
 	tab: BoardTab;
 	/** The item's key, so the comment follows the item when the board updates. */
 	key: string;
-	/** How the agent reads the item: `q1`, `d2`, `slice 3 (s3)`, `brief goal`. */
+	/** How the agent reads the item: `q1`, `d2`, `slice 3`, `brief goal`. */
 	ref: string;
 	/** The question, title or text the item is about. */
 	label?: string;
@@ -18,7 +18,7 @@ export interface BoardComment {
  * ```
  * Board comments:
  * - q2 "How long do dedup keys stay unique?": per day is fine, but use the panel's time zone
- * - slice 3 (s3) "Store dedup key": also backfill old rows
+ * - slice 3 "Store dedup key": also backfill old rows
  * ```
  *
  * Lines after the first of a comment are indented under it, so the list stays a list.

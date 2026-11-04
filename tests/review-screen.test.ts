@@ -15,7 +15,6 @@ import { createPhaseReview, phaseReview, REVIEW_BODIES, renderReview, ReviewScre
 import { reviewGeometry } from "../src/ui/review/screen.ts";
 import { FALLBACK_CHROME, TRANSCRIPT_ROWS } from "../src/ui/room.ts";
 import { fullArchitecture } from "./fixtures/plan/architecture.ts";
-import { sliceOrder } from "../src/ui/review/slice.ts";
 import { paintLine, sp } from "../src/ui/spans.ts";
 import { ENTRY_TYPE, event, type EventInput } from "../src/state/events.ts";
 import { harness, type BranchEntry } from "./harness.ts";
@@ -289,13 +288,19 @@ describe("phase review screens", () => {
 	it("Slice shows the slices in build order with arrows, files, steps and verify", () => {
 		const t = text("slice");
 		assert.match(t, /SLICES +3 slices · build order/);
-		assert.ok(t.indexOf("s1  Dedupe window") < t.indexOf("s2  Wire into processor"));
-		assert.match(t, /● s2 {2}Wire into processor {2}← s1/);
-		assert.match(t, /│ {3}A window drops repeats\./);
-		assert.match(t, /│ {3}steps {3}1\. add/);
-		assert.match(t, /│ {11}2\. test/);
-		assert.match(t, /│ {3}verify {2}npm test -- window/);
-		assert.match(t, /│ {2}▼ +│/);
+		assert.ok(t.indexOf("1  Dedupe window") < t.indexOf("3  Wire into processor"));
+		assert.match(t, /● 1 {2}Dedupe window +│/);
+		assert.match(t, /● 3 {2}Wire into processor {2}← 1/, "by the build number, as on the board and in the plan");
+		assert.doesNotMatch(t, /\bs[123]\b/);
+		assert.match(t, /│ {6}A window drops repeats\./);
+		assert.match(t, /│ {6}steps {3}1\. add/);
+		assert.match(t, /│ {14}2\. test/);
+		assert.match(t, /│ {6}verify {2}npm test -- window/);
+		const linked = text("slice", 80, { ...ARCH, slices: ARCH.slices.filter((x) => x.id !== "s3") });
+		assert.match(
+			linked,
+			/● 1 {2}Dedupe window[\s\S]*│ {2}│ {3}A window drops repeats\.[\s\S]*│ {2}▼ +│\n│ {2}● 2 {2}Wire/,
+		);
 		assert.match(t, /verify {2}missing/);
 		const broken = { ...ARCH, slices: [{ ...ARCH.slices[2]!, dependsOn: ["s9"] }] };
 		assert.match(text("slice", 80, broken), /✗ s3 depends on unknown slice s9/);
@@ -304,15 +309,12 @@ describe("phase review screens", () => {
 			{ ...ARCH.slices[2]!, id: "x", dependsOn: ["y"] },
 			{ ...ARCH.slices[2]!, id: "y", dependsOn: ["x"] },
 		];
-		assert.deepEqual(
-			sliceOrder(cycle).map((s) => s.id),
-			["x", "y"],
-		);
+		assert.match(text("slice", 80, { ...ARCH, slices: cycle }), /● 1 {2}Docs {2}← 2[\s\S]*● 2 {2}Docs {2}← 1/);
 	});
 
 	it("Slice keeps the rail to the next slice on wrapped lines too", () => {
 		const lines = screen("slice", { ...fullArchitecture(), phase: "slice" }).lines(60);
-		const start = lines.findIndex((l) => l.includes("● s1"));
+		const start = lines.findIndex((l) => l.includes("● 1 "));
 		const end = lines.findIndex((l, i) => i > start && l.includes("▼"));
 		const block = lines.slice(start + 1, end);
 		assert.ok(block.length > 6, "long enough to wrap");
@@ -326,7 +328,7 @@ describe("phase review screens", () => {
 		assert.match(t, /4 modules · 4 decisions · 1 open · 2 diagrams · 3 slices in 2 steps · ⚠ 2 risks/);
 		for (const heading of ["BRIEF", "CONSTRAINTS", "DONE WHEN", "MODULES", "DECISIONS", "DESIGN", "SLICES", "RISKS"])
 			assert.match(t, new RegExp(heading));
-		assert.ok(t.indexOf("s1  Dedupe window") < t.indexOf("s2  Wire into processor"), "build order");
+		assert.ok(t.indexOf("1  Dedupe window") < t.indexOf("3  Wire into processor"), "build order");
 		assert.match(t, /╭─ Event flow/);
 		assert.doesNotMatch(t, /Approving writes/);
 		assert.match(t, /Approving the Blueprint makes the plan final\./);

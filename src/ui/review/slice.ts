@@ -1,26 +1,8 @@
+import { buildOrder, type Ordered } from "../../plan/order.ts";
 import { sliceProblems } from "../../state/queries.ts";
 import type { Slice } from "../../state/types.ts";
 import { clipLine, lineWidth, sp, wrapAfter, type Line } from "../spans.ts";
 import { risks, section, trim, type ReviewBody } from "./common.ts";
-
-/** Slices in build order: each after the slices it depends on, otherwise in the agent's order. Cycles go last. */
-export function sliceOrder(slices: readonly Slice[]): Slice[] {
-	const ids = new Set(slices.map((s) => s.id));
-	const placed = new Set<string>();
-	const order: Slice[] = [];
-	let left = [...slices];
-	while (left.length) {
-		const next = left.find((s) => s.dependsOn.every((d) => d === s.id || !ids.has(d) || placed.has(d)));
-		if (!next) {
-			order.push(...left);
-			break;
-		}
-		order.push(next);
-		placed.add(next.id);
-		left = left.filter((s) => s !== next);
-	}
-	return order;
-}
 
 const LABEL_WIDTH = 8;
 
@@ -39,11 +21,14 @@ function field(rail: Line, label: string, text: string, width: number, color: "t
 	return railed(rail, [...rail, sp(label.padEnd(LABEL_WIDTH), "dim")], text, width, color);
 }
 
-function sliceLines(slice: Slice, linked: boolean, width: number): Line[] {
+function sliceLines(slice: Slice, number: string, deps: string[], linked: boolean, width: number): Line[] {
 	const rail: Line = [sp(linked ? "│   " : "    ", "borderAccent")];
-	const deps = slice.dependsOn.length ? [sp("  ← ", "accent"), sp(slice.dependsOn.join(", "), "accent")] : [];
+	const after = deps.length ? [sp("  ← ", "accent"), sp(deps.join(", "), "accent")] : [];
 	const lines: Line[] = [
-		clipLine([sp("● ", "accent"), sp(slice.id, "dim"), sp("  "), sp(slice.title, "text", true), ...deps], width),
+		clipLine(
+			[sp("● ", "accent"), sp(number, "accent", true), sp("  "), sp(slice.title, "text", true), ...after],
+			width,
+		),
 	];
 	if (slice.goal) lines.push(...railed(rail, rail, slice.goal, width, "muted"));
 	if (slice.files.length) lines.push(...field(rail, "files", slice.files.join(", "), width, "muted"));
@@ -54,14 +39,19 @@ function sliceLines(slice: Slice, linked: boolean, width: number): Line[] {
 	return lines;
 }
 
-/** Slices in the given order, an arrow between a slice and the next one when that one depends on it. */
-export function sliceList(order: readonly Slice[], width: number): Line[] {
+/**
+ * Slices in build order, by the number the plan file and the board give them, with an arrow between a slice
+ * and the next one when that one depends on it.
+ */
+export function sliceList(order: readonly Ordered[], width: number): Line[] {
 	if (!order.length) return [[sp("no slices yet", "warning")]];
+	const numbers = new Map(order.map((o) => [o.slice.id, String(o.number)]));
 	const lines: Line[] = [];
-	order.forEach((slice, i) => {
-		const next = order[i + 1];
+	order.forEach(({ slice, number }, i) => {
+		const next = order[i + 1]?.slice;
 		const linked = next?.dependsOn.includes(slice.id) ?? false;
-		lines.push(...sliceLines(slice, linked, width));
+		const deps = slice.dependsOn.map((d) => numbers.get(d) ?? d);
+		lines.push(...sliceLines(slice, String(number), deps, linked, width));
 		if (next) lines.push(linked ? [sp("▼", "borderAccent")] : []);
 	});
 	return lines;
@@ -69,7 +59,7 @@ export function sliceList(order: readonly Slice[], width: number): Line[] {
 
 /** Slice: the slices in build order, each with its dependencies, files, steps and verify commands. */
 export const sliceBody: ReviewBody = (arch, width) => {
-	const order = sliceOrder(arch.slices);
+	const order = buildOrder(arch.slices);
 	const lines: Line[] = [];
 	for (const problem of sliceProblems(arch.slices))
 		lines.push(...wrapAfter([sp("✗ ", "error")], problem, width, "error"));
