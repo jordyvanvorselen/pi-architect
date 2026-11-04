@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, join } from "node:path";
 import { describe, it } from "node:test";
 import { ENTRY_TYPE, PLAN_DIR_FLAG, WIDGET_KEY, type ArchitectOverrides } from "../src/index.ts";
 import { SECTION } from "../src/prompt.ts";
@@ -111,9 +112,11 @@ describe("writing the plan on Blueprint approval", () => {
 		await flagged.command("architect", "plan write");
 		assert.equal(rebuild(flagged.branch).plan!.path, join("plans", "dedupe.md"));
 
-		const h = await approved({ overrides: { planDir: "/tmp/../tmp" } });
+		// A fresh directory, so earlier runs cannot fill it up with dedupe-2.md … dedupe-100.md.
+		const dir = mkdtempSync(join(tmpdir(), "pi-architect-plans-"));
+		const h = await approved({ overrides: { planDir: join(dir, "..", basename(dir)) } });
 		await h.command("architect", "plan write");
-		assert.match(rebuild(h.branch).plan!.path, /^\/(private\/)?tmp\/dedupe(-\d+)?\.md$/);
+		assert.equal(rebuild(h.branch).plan!.path, join(dir, "dedupe.md"));
 		assert.ok(h.flags[PLAN_DIR_FLAG]);
 	});
 
