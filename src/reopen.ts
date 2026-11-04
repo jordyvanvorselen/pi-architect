@@ -21,6 +21,11 @@ export const REOPEN_HINT = "/architect review opens it again";
 export class Reviews {
 	private closed: { phase: Phase; summary?: string } | undefined;
 
+	/** Forget the closed review, when the architecture or the branch changes under it. */
+	clear(): void {
+		this.closed = undefined;
+	}
+
 	/** `ui`, remembering a review the user closed without a verdict. */
 	wrap(ui: ReviewUi): ReviewUi {
 		return async (request, ctx) => {

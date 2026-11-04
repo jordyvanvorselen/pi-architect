@@ -692,6 +692,24 @@ describe("architect_advance", () => {
 		assert.deepEqual(sent.options, { triggerTurn: true });
 	});
 
+	it("/architect review forgets the summary of a review closed before a reset or a branch change", async () => {
+		const frame = { feature: "Dedupe", brief: { goal: "g", done_when: ["d"] } };
+		for (const change of ["reset", "tree"] as const) {
+			const ui = new FakeUi().keys([KEYS.escape, KEYS.enter], [KEYS.escape, KEYS.enter]);
+			const h = await architecting(ui);
+			await h.call("architect_update", frame);
+			await h.call("architect_advance", { summary: "Check the goal." });
+			if (change === "reset") {
+				ui.script({ select: ["Yes, discard it"] });
+				await h.command("architect", "reset");
+				await h.call("architect_update", frame);
+			} else await h.fire("session_tree", {});
+			await h.command("architect", "review");
+			assert.equal(ui.customs.length, 2, change);
+			assert.ok(!ui.customs[1]!.frames[0]!.some((l) => l.includes("Check the goal.")), change);
+		}
+	});
+
 	it("/architect review says why there is nothing to open", async () => {
 		const ui = new FakeUi();
 		const h = await architecting(ui);

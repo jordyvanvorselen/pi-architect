@@ -202,6 +202,8 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		pi.appendEntry(ENTRY_TYPE, e);
 		const before = toolKey(state);
 		state = reduce(state, e);
+		// A new or discarded architecture: the summary of a review closed before it is not about this one.
+		if (e.type === "begin" || e.type === "reset") reviews.clear();
 		// A mode switch or a phase approval changes the tools, also in the middle of a run: Pi declares
 		// the new set before the next request.
 		if (toolKey(state) !== before) applyTools();
@@ -212,6 +214,7 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		ctxRef = ctx;
 		state = rebuild(ctx.sessionManager.getBranch());
 		progress = undefined;
+		reviews.clear();
 		applyTools();
 		// Pi quit or the branch changed while a review was open: nobody waits for that review any more, so
 		// the phase goes back to working instead of staying in review for good.
