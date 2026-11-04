@@ -285,6 +285,18 @@ describe("phase review screens", () => {
 		assert.match(text("design", 80, two), /2 diagrams/);
 	});
 
+	it("Design wraps a caption at the screen's width, under the diagram card, not inside its 48 columns", () => {
+		const caption =
+			"Every event gets a dedup key from the panel id and the sequence number, and the processor skips a key it has seen in the last five minutes.";
+		const arch = { ...ARCH, diagrams: [{ ...ARCH.diagrams[0]!, caption }] };
+		const lines = screen("design", arch).lines(120);
+		const bottom = lines.findIndex((l) => /╰─/.test(l.slice(1)));
+		const under = lines.slice(bottom + 1).filter((l) => /every event|sequence|five minutes/i.test(l));
+		assert.ok(under.length > 0 && under.length <= 2, under.join("\n"));
+		assert.ok(under[0]!.trim().length > 80, "uses the full width");
+		assert.match(under[0]!, /^│ {4}Every event/, "indented under the card");
+	});
+
 	it("Slice shows the slices in build order with arrows, files, steps and verify", () => {
 		const t = text("slice");
 		assert.match(t, /SLICES +3 slices · build order/);
