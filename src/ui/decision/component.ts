@@ -4,11 +4,9 @@ import { InputGrace } from "../grace.ts";
 import { InlineEditor } from "../inline-editor.ts";
 import type { Paint } from "../paint.ts";
 import type { ScreenOptions } from "../screen-options.ts";
+import { inlineRoom } from "../room.ts";
 import { paintLine } from "../spans.ts";
 import { renderDecision, type DecisionMode } from "./card.ts";
-
-/** Rows kept free above the card, so it never fills the whole terminal. */
-const SPARE_ROWS = 4;
 
 /**
  * The interactive decision card. ←/→, tab and 1–4 move between options; ↵ chooses; `c` chooses with a
@@ -27,7 +25,7 @@ export class DecisionCard implements Component, Focusable {
 	private editor: InlineEditor | undefined;
 	/** What the user typed per editor, kept when they step back with esc. */
 	private readonly drafts = new Map<DecisionMode, string>();
-	private cache: { width: number; lines: string[] } | undefined;
+	private cache: { width: number; rows: number; lines: string[] } | undefined;
 	private hasFocus = false;
 	private readonly grace: InputGrace;
 	private readonly board: (() => void) | undefined;
@@ -124,7 +122,9 @@ export class DecisionCard implements Component, Focusable {
 	}
 
 	render(width: number): string[] {
-		if (this.cache?.width === width) return this.cache.lines;
+		// The room changes with Pi's chrome, e.g. when the loader or a queued message shows.
+		const rows = Math.max(10, inlineRoom(this.tui, this, width));
+		if (this.cache?.width === width && this.cache.rows === rows) return this.cache.lines;
 		const { decision, index, total, feature } = this.request;
 		const editor = this.editor;
 		const lines = renderDecision(
@@ -137,11 +137,11 @@ export class DecisionCard implements Component, Focusable {
 				...(total !== undefined ? { total } : {}),
 				...(feature ? { feature } : {}),
 				...(editor ? { editor: (w: number) => editor.lines(w) } : {}),
-				maxRows: Math.max(10, this.tui.terminal.rows - SPARE_ROWS),
+				maxRows: rows,
 			},
 			width,
 		).map((line) => paintLine(line, this.paint));
-		this.cache = { width, lines };
+		this.cache = { width, rows, lines };
 		return lines;
 	}
 
