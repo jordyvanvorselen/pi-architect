@@ -74,7 +74,7 @@ export interface BoardEnv {
 export interface BoardItem {
 	/** Stable across updates, e.g. `q1`, `diagram:d2`, `brief:goal`. */
 	key: string;
-	/** How the agent reads it in a board comment: `q1`, `d2`, `slice 3 (s3)`, `brief goal`. */
+	/** How the agent reads it in a board comment: `q1`, `d2`, `slice 3`, `brief goal`. */
 	ref: string;
 	/** What it is about, quoted in the comment when it adds something, e.g. the question. */
 	label?: string;
@@ -413,7 +413,9 @@ function slicesContent(arch: Architecture, progress: readonly SliceProgress[] | 
 		const newStep = i === 0 || order[i - 1]!.step !== step;
 		const parallel = sizes.get(step)! > 1;
 		const deps = slice.dependsOn.map((d) => String(numberOf.get(d) ?? d));
-		const ref = `slice ${number}${slice.id !== String(number) ? ` (${slice.id})` : ""}`;
+		// The build number, as the plan file, the review screens and the build widget show it. The comment's
+		// label, the slice title, tells the agent which one it is.
+		const ref = `slice ${number}`;
 		return {
 			key: `slice:${slice.id}`,
 			ref,

@@ -90,15 +90,7 @@ export const blueprintBody: ReviewBody = (arch, width, paint, request) => {
 			),
 		);
 	lines.push(
-		...section(
-			"Slices",
-			sliceList(
-				bp.slices.map((o) => o.slice),
-				width,
-			),
-			width,
-			bp.slices.length ? [sp("build order", "dim")] : [],
-		),
+		...section("Slices", sliceList(bp.slices, width), width, bp.slices.length ? [sp("build order", "dim")] : []),
 	);
 	lines.push(...risks(arch, width));
 	lines.push([sp("Approving the Blueprint makes the plan final.", "muted")]);

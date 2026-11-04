@@ -521,7 +521,7 @@ describe("architect_slice", () => {
 			)
 				.render(80)
 				.map((l) => l.trimEnd()),
-			["✓ 1 slice in 1 step · Slice ready for review", "   1  s1"],
+			["✓ 1 slice in 1 step · Slice ready for review", "  step 1  1"],
 		);
 		const component = tool.renderResult!(
 			{ content: [{ type: "text", text: "bad" }], details: undefined },

@@ -475,7 +475,7 @@ describe("board comments", () => {
 			b.closed()!.map((c) => [c.tab, c.ref, c.label, c.text]),
 			[
 				["decisions", "q2", "How long do dedup keys stay unique?", "Per day is fine"],
-				["slices", "slice 1 (s1)", "Add the dedup key column", "Split it"],
+				["slices", "slice 1", "Add the dedup key column", "Split it"],
 				["brief", "brief goal", undefined, "Tighter"],
 			],
 		);

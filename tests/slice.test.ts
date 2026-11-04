@@ -313,20 +313,20 @@ describe("slice rendering", () => {
 	it("shows the build order collapsed, and titles and changes expanded", () => {
 		assert.equal(
 			sliceResult(details, "", false, false, plainTheme),
-			["✓ 3 slices in 2 steps · Slice ready for review", "   1  s1", "   2  s2 ∥ s3"].join("\n"),
+			["✓ 3 slices in 2 steps · Slice ready for review", "  step 1  1", "  step 2  2 ∥ 3"].join("\n"),
 		);
 		assert.equal(
 			sliceResult({ ...details, changed: ["s1"], removed: ["s9"] }, "", true, false, plainTheme),
 			[
 				"✓ 3 slices in 2 steps · Slice ready for review",
-				"   1  s1 Slice s1",
-				"   2  s2 Slice s2 ∥ s3 Slice s3",
-				"  + s1, s2, s3  ~ s1  − s9",
+				"  step 1  1 Slice s1",
+				"  step 2  2 Slice s2 ∥ 3 Slice s3",
+				"  + 1, 2, 3  ~ 1  − s9",
 			].join("\n"),
 		);
 		assert.equal(
 			sliceResult({ ...details, added: [], titles: {}, groups: [["s1"]] }, "", true, false, plainTheme),
-			["✓ 1 slice in 1 step · Slice ready for review", "   1  s1 "].join("\n"),
+			["✓ 1 slice in 1 step · Slice ready for review", "  step 1  1 "].join("\n"),
 		);
 		assert.equal(
 			sliceResult({ ...details, missing: ["x"], phase: "blueprint" }, "", false, false, plainTheme).split("\n")[0],

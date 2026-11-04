@@ -116,7 +116,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 - Four options sit two by two when a row does not fit. On narrow or short terminals the options fold into a list with the focused one open.
 - The choice and any comment go back to the model as the tool result. "Pick B, but only for alarms" is a valid answer.
   An own option is recorded as a new option and chosen. A question goes back to the model, which answers and asks again with the same id.
-- Decision ids are `q1`, `q2` and so on. Diagrams use `d1`.
+- Decision ids are `q1`, `q2` and so on. Diagrams use `d1`. Slices go by their build number, as in the plan file: `slice 3`.
 - The header counts the decisions raised so far, like `Decision 3/5`. When the agent estimates more than are raised, it shows the estimate as one: `Decision 1 of about 3`.
 
 ## Phase Review screens
@@ -211,7 +211,7 @@ The wheel scrolls, and shift+wheel scrolls a diagram sideways.
 The board is where the user co-architects. Select anything (a brief field, a finding, a decision, a diagram, a risk, a slice or the plan) and press `c`.
 An editor opens at the bottom. ↵ saves the comment, esc cancels.
 
-- A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3 (s3)`.
+- A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3`.
 - `c` on an item with a comment edits it. Saving it empty or pressing `x` removes it. `m` jumps to the next comment, on any tab. Clicking an item in the bottom edge jumps to it.
 - Closing the board with comments asks first, in the bottom bar: `Send 2 comments to the agent?  ↵ send  d discard  esc keep editing`.
   Without comments the board closes at once.
@@ -220,7 +220,7 @@ An editor opens at the bottom. ↵ saves the comment, esc cancels.
   ```
   Board comments:
   - q2 "How long do dedup keys stay unique?": per day is fine, but use the panel's time zone
-  - slice 3 (s3) "Skip duplicates on insert": also count the skipped ones
+  - slice 3 "Skip duplicates on insert": also count the skipped ones
   ```
 
 - When the agent is idle the message starts a turn. When it is working, the message is steered in, so the agent reads it before its next step.
