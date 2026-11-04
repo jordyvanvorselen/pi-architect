@@ -45,7 +45,8 @@ export function phaseGuidance(phase: Phase, arch?: Architecture): string[] {
 		case "slice":
 			return [
 				"Split the work into buildable slices with architect_slice: id, title, goal, depends_on, files, steps and verify commands.",
-				"Each slice must be buildable and verifiable on its own.",
+				"Each slice must be buildable and verifiable on its own, with its tests in the same slice, not in a last testing slice.",
+				"List every file a slice touches. Slices that change the same file must depend on each other.",
 			];
 		case "blueprint":
 			return [

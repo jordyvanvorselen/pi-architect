@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { buildOrder, type Ordered } from "../plan/order.ts";
+import { unmappedFiles } from "../plan/blueprint.ts";
+import { buildOrder, sharedFiles, type Ordered } from "../plan/order.ts";
 import type { SlicesEvent } from "../state/events.ts";
 import { PHASE_LABEL, type Phase } from "../state/phases.ts";
 import { missing, sliceProblems } from "../state/queries.ts";
@@ -249,9 +250,21 @@ export function planSlices(arch: Architecture, input: SliceInput, rejections?: R
 	const steps = groups.map((g, i) => `${i + 1}. ${g.join(" + ")}`).join(" → ");
 	const next = readiness(phase, gaps);
 	const parallel = groups.some((g) => g.length > 1) ? " Slices joined by + can be built in parallel." : "";
+	// Not errors: the plan still works, but the builder gets a better one when the agent fixes these.
+	const notes: string[] = [];
+	for (const s of sharedFiles(order))
+		notes.push(
+			`${s.ids.slice(0, -1).join(", ")} and ${s.ids.at(-1)} can be built at the same time but ${s.ids.length === 2 ? "both" : "all"} change ${s.file}: make one depend on the other.`,
+		);
+	const unmapped = unmappedFiles({ modules: arch.modules, slices });
+	if (unmapped.length)
+		notes.push(
+			`Not in the module map, so the plan lists ${unmapped.length === 1 ? "it" : "them"} as new: ${unmapped.join(", ")}. If a file exists, record its module with architect_update({ modules }).`,
+		);
+	const noted = notes.length ? ` Check: ${notes.join(" ")}` : "";
 	return {
 		event: { type: "slices", slices, replace: true },
-		text: `Saved ${slices.length} slice${slices.length === 1 ? "" : "s"}. Build order: ${steps}.${parallel} ${next}`,
+		text: `Saved ${slices.length} slice${slices.length === 1 ? "" : "s"}. Build order: ${steps}.${parallel}${noted} ${next}`,
 		details: {
 			phase,
 			groups,

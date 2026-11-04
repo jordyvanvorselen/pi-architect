@@ -243,7 +243,17 @@ function slices(bp: Blueprint): string[] {
 	const line = groups
 		.map((g) => (g.length > 1 ? `${g.slice(0, -1).join(", ")} and ${g.at(-1)} in any order` : String(g[0])))
 		.join(", then ");
-	return [SLICES_HEADING, `Build order: ${line}.`, ...bp.slices.flatMap((o) => slice(o, byId))];
+	// Slices that may run at the same time but change the same file would edit it at once.
+	const shared = bp.sharedFiles.map(
+		(s) =>
+			`- Slices ${s.numbers.slice(0, -1).join(", ")} and ${s.numbers.at(-1)} ${s.numbers.length === 2 ? "both" : "all"} change ${code(s.file)}. Build them one after the other, not at the same time.`,
+	);
+	return [
+		SLICES_HEADING,
+		`Build order: ${line}.`,
+		...(shared.length ? [shared.join("\n")] : []),
+		...bp.slices.flatMap((o) => slice(o, byId)),
+	];
 }
 
 /**
