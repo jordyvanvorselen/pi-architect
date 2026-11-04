@@ -129,12 +129,13 @@ export function reduce(state: ArchitectState, event: ArchitectEvent): ArchitectS
 				keptOff,
 			};
 		}
+		// A new architecture or a reset keeps the plan: the file is still there, and build mode still builds it.
 		case "begin":
-			return { mode: state.mode, architecture: newArchitecture(event.at, event.feature, event.slug) };
-		case "reset":
-			return state.mode === "architect"
-				? { mode: state.mode, architecture: newArchitecture(event.at) }
-				: { mode: state.mode };
+			return { ...state, architecture: newArchitecture(event.at, event.feature, event.slug) };
+		case "reset": {
+			const { architecture: _architecture, ...rest } = state;
+			return state.mode === "architect" ? { ...rest, architecture: newArchitecture(event.at) } : rest;
+		}
 		case "plan": {
 			const path = typeof event.path === "string" ? event.path.trim() : "";
 			if (!path || typeof event.slug !== "string" || typeof event.at !== "number") return state;

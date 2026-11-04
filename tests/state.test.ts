@@ -85,7 +85,7 @@ describe("begin and reset", () => {
 			{ type: "mode", mode: "build", at: 2 },
 			{ type: "reset", at: 3 },
 		);
-		assert.deepEqual(state, { mode: "build" });
+		assert.deepEqual(state, { mode: "build", keptOff: [] });
 	});
 
 	it("reset in architect mode starts over with an empty architecture", () => {
