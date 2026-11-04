@@ -52,7 +52,8 @@ The builder ticks the boxes in the plan file as it works, so the plan file is wh
 | `ctrl+alt+a`                     | Toggle the mode                                                   |
 | `pi --architect`                 | Start in architect mode                                           |
 
-`build`, `board`, `review`, `plan` and `reset` are reserved. A feature name cannot start with one of them.
+`build`, `board`, `review`, `plan` and `reset` are reserved. A first word that only starts with one, like `Builder`, asks whether you meant the command.
+Put a feature name in quotes to use it as written: `/architect "Build pipeline"`. Every question that discards work starts on No.
 `/architect plan` alone also offers to build the plan in this session or to copy its path.
 
 On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
