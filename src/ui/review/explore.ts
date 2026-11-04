@@ -1,3 +1,4 @@
+import { moduleFiles } from "../../state/queries.ts";
 import type { ModuleRef, ModuleRole } from "../../state/types.ts";
 import type { Color } from "../paint.ts";
 import { clipLine, lineWidth, sp, wrap, type Line } from "../spans.ts";
@@ -38,8 +39,7 @@ export function moduleTree(modules: readonly ModuleRef[]): Node {
 		let node = root;
 		for (const part of parts) node = child(node, part);
 		node.module = module;
-		for (const file of module.files) {
-			if (file === module.path || module.path.endsWith(`/${file}`)) continue;
+		for (const file of moduleFiles(module)) {
 			const relative = file.startsWith(`${module.path}/`) ? file.slice(module.path.length + 1) : file;
 			if (!node.children.some((c) => c.file && c.name === relative))
 				node.children.push({ name: relative, children: [], file: true });
@@ -60,7 +60,9 @@ function collapse(node: Node): Node {
 function nodeLines(node: Node, prefix: string, last: boolean, top: boolean, width: number): Line[] {
 	const branch = top ? "" : last ? "└─ " : "├─ ";
 	const lead = [sp(prefix + branch, "borderMuted")];
-	const name = node.children.length && !node.file ? `${node.name}/` : node.name;
+	// A folder keeps its slash, also a folder module without files yet like `test/`.
+	const folder = !node.file && (node.children.length > 0 || Boolean(node.module?.path.endsWith("/")));
+	const name = folder ? `${node.name}/` : node.name;
 	const mark = node.module ? ROLE_MARK[node.module.role] : undefined;
 	const label: Line = node.file
 		? [sp(name, "muted")]

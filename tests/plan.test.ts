@@ -122,7 +122,10 @@ describe("renderPlan", () => {
 		const md = await readFile(SNAPSHOT, "utf8");
 		assert.doesNotMatch(md, /[—–]/, "no em or en dashes");
 		assert.match(md, /If a decision cannot work, stop and ask the user\./);
-		assert.match(md, /- `src\/api\/alarms` \(read only, do not change\)/);
+		assert.match(
+			md,
+			/- `src\/api\/alarms\/list\.ts` \(read only, do not change\): Reads `panel_events`\.\n\n### Findings/,
+		);
 		assert.match(
 			md,
 			/\*\*A\. Forever\*\* \(recommended, but not chosen\)/,
@@ -253,7 +256,7 @@ describe("buildBlueprint", () => {
 		assert.equal(bp.status, "approved");
 		assert.deepEqual(
 			bp.modules.map((m) => m.path),
-			["src/ingest", "migrations", "src/ingest/dedup", "tests/ingest", "src/api/alarms"],
+			["src/ingest", "migrations", "src/ingest/dedup", "tests/ingest", "src/api/alarms/list.ts"],
 		);
 		assert.deepEqual(
 			bp.risks.map((r) => r.severity),

@@ -1,5 +1,5 @@
 import { phaseIndex, type Phase } from "./phases.ts";
-import type { Architecture, PhaseState, Slice } from "./types.ts";
+import type { Architecture, ModuleRef, PhaseState, Slice } from "./types.ts";
 
 /** How `phase` stands in the architecture: approved, working, in review or pending. */
 export function phaseState(arch: Architecture, phase: Phase): PhaseState {
@@ -115,4 +115,13 @@ export function missing(arch: Architecture): string[] {
 		case "blueprint":
 			return [];
 	}
+}
+
+/**
+ * A module's own files, without one that only repeats the module's path (like `todo.ts` or `src/todo.ts`
+ * under the module `src/todo.ts`), so a module that is a file lists no files under itself.
+ */
+export function moduleFiles(module: Pick<ModuleRef, "path" | "files">): string[] {
+	const path = module.path.replace(/\/+$/, "");
+	return module.files.filter((f) => f !== path && !path.endsWith(`/${f}`));
 }
