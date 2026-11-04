@@ -2,7 +2,7 @@ import { moduleFiles } from "../../state/queries.ts";
 import type { ModuleRef, ModuleRole } from "../../state/types.ts";
 import type { Color } from "../paint.ts";
 import { clipLine, lineWidth, sp, wrap, type Line } from "../spans.ts";
-import { risks, section, trim, wrapIndented, type ReviewBody } from "./common.ts";
+import { section, trim, wrapIndented, type ReviewBody } from "./common.ts";
 import { diagramLines } from "./diagram.ts";
 
 export const ROLE_MARK: Record<ModuleRole, { glyph: string; color: Color; name: Color }> = {
@@ -99,7 +99,7 @@ export const legend: Line = [
 	sp("context", "dim"),
 ];
 
-/** Explore: the big picture first (diagrams of the existing code, risks), then the module map and the findings. */
+/** Explore: the big picture first (diagrams of the existing code), then the module map and the findings. */
 export const exploreBody: ReviewBody = (arch, width, paint) => {
 	const lines: Line[] = [];
 	const diagrams = arch.diagrams.filter((d) => d.phase === "explore");
@@ -111,7 +111,6 @@ export const exploreBody: ReviewBody = (arch, width, paint) => {
 				width,
 			),
 		);
-	lines.push(...risks(arch, width));
 	lines.push(...section("Modules", moduleMap(arch.modules, width), width, legend));
 	const findings = arch.findings.flatMap((f) => {
 		const tag = `${f.id} `.padEnd(4);

@@ -4,7 +4,13 @@ import { bullets, halves, pair, paragraph, risks, section, trim, type ReviewBody
 import { decisionLines } from "./decide.ts";
 import { diagramLines } from "./diagram.ts";
 import { legend, moduleMap } from "./explore.ts";
-import { sliceList } from "./slice.ts";
+import { buildOrderSections, sliceList } from "./slice.ts";
+
+/** `── DETAILS ──────`, between the overview and the details. */
+function divider(label: string, width: number): Line {
+	const head = `── ${label.toUpperCase()} `;
+	return [sp(head.slice(0, width), "dim", true), sp("─".repeat(Math.max(0, width - head.length)), "dim")];
+}
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
@@ -43,9 +49,9 @@ function summary(counts: ReturnType<typeof buildBlueprint>["counts"], width: num
 }
 
 /**
- * Blueprint: the whole design on one page, in the order of the plan file. Where approving writes the
- * file, the counts, the brief, the module map, the decisions, the design diagrams, the slices in build
- * order and the risks.
+ * Blueprint: the whole design on one page, the overview first. Where approving writes the file, the counts,
+ * the brief, the decisions, the design diagrams, the build order diagram and the risks. Below a divider the
+ * details: the module map and each slice's files, steps and verify commands.
  */
 export const blueprintBody: ReviewBody = (arch, width, paint, request) => {
 	const bp = buildBlueprint(arch);
@@ -72,7 +78,6 @@ export const blueprintBody: ReviewBody = (arch, width, paint, request) => {
 	);
 	lines.push(...brief);
 
-	if (bp.modules.length) lines.push(...section("Modules", moduleMap(bp.modules, width), width, legend));
 	if (arch.decisions.length)
 		lines.push(
 			...section(
@@ -89,10 +94,13 @@ export const blueprintBody: ReviewBody = (arch, width, paint, request) => {
 				width,
 			),
 		);
-	lines.push(
-		...section("Slices", sliceList(bp.slices, width), width, bp.slices.length ? [sp("build order", "dim")] : []),
-	);
+	lines.push(...buildOrderSections(bp.slices, width));
 	lines.push(...risks(arch, width));
+
+	if (bp.modules.length || bp.slices.length) lines.push(divider("Details", width), []);
+	if (bp.modules.length) lines.push(...section("Modules", moduleMap(bp.modules, width), width, legend));
+	if (bp.slices.length)
+		lines.push(...section("Slices", sliceList(bp.slices, width, false), width, [sp("files · steps · verify", "dim")]));
 	lines.push([sp("Approving the Blueprint makes the plan final.", "muted")]);
 	return trim(lines);
 };

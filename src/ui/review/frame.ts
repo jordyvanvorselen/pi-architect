@@ -1,5 +1,5 @@
 import { sp } from "../spans.ts";
-import { bullets, halves, pair, paragraph, risks, section, trim, type ReviewBody } from "./common.ts";
+import { bullets, halves, pair, paragraph, section, trim, type ReviewBody } from "./common.ts";
 
 /** Frame: the brief as a card. Goal, then constraints beside out of scope, then done-when as a checklist. */
 export const frameBody: ReviewBody = (arch, width) => {
@@ -19,6 +19,5 @@ export const frameBody: ReviewBody = (arch, width) => {
 		[],
 	);
 	lines.push(...section("Done when", bullets(brief.doneWhen, width, "☐", "success"), width));
-	lines.push(...risks(arch, width));
 	return trim(lines);
 };

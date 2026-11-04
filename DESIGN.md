@@ -124,14 +124,18 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 
 `architect_advance` opens a review screen for the phase: a frame with the agent's summary, the phase and the verdict keys.
 
-| Phase     | The screen shows                                                      |
-| --------- | --------------------------------------------------------------------- |
-| Frame     | The brief: goal, constraints beside out of scope, done-when           |
-| Explore   | Diagrams and risks first. Below them the module map and the findings  |
-| Decide    | Each decision with the choice and comment. Rejected options are dim   |
-| Design    | The diagrams, drawn by the diagram renderer                           |
-| Slice     | The slices in build order, with arrows, files, steps and verify       |
-| Blueprint | Everything on one page, and the path the plan file will be written to |
+| Phase     | The screen shows                                                    |
+| --------- | ------------------------------------------------------------------- |
+| Frame     | The brief: goal, constraints beside out of scope, done-when         |
+| Explore   | Diagrams first. Below them the module map and the findings          |
+| Decide    | Each decision with the choice and comment. Rejected options are dim |
+| Design    | The diagrams, drawn by the diagram renderer                         |
+| Slice     | The build order as a diagram, then what each slice delivers         |
+| Blueprint | The overview first, then the details. Also where the plan file goes |
+
+The Blueprint starts with the overview: the brief, the decisions, the design diagrams, the build order diagram and the risks. Below a `DETAILS` divider come the module map and each slice's files, steps and verify commands.
+
+Only the Blueprint lists the risks. The other screens leave them to the board's Risks tab, so they do not repeat at every phase.
 
 Long screens scroll with ↑/↓ or j/k, PgUp/PgDn, space, Home and End. When the phase does not fit, the agent's summary shrinks to two lines, and on very short terminals it goes. In Pi's fullscreen mode these keys scroll the screen, not the transcript behind it. The right border is the scrollbar. ↵ approves, `r` opens an editor for the requested changes, `b` opens the board.
 

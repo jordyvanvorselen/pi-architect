@@ -40,14 +40,13 @@ const arch: Architecture = {
 };
 
 describe("review lines", () => {
-	it("show the content of each phase, and the risks", () => {
+	it("show the content of each phase, and the risks only in the Blueprint", () => {
 		assert.deepEqual(reviewLines(arch, "frame"), [
 			"Feature: Dedupe",
 			"Goal: Fewer duplicate alarms",
 			"Constraints: no new infra; keep the API",
 			"Out of scope: –",
 			"Done when: no duplicates",
-			"⚠ high ordering across nodes",
 		]);
 		const explored = {
 			...arch,
@@ -55,14 +54,8 @@ describe("review lines", () => {
 		};
 		assert.deepEqual(
 			reviewLines(explored, "explore"),
-			[
-				"▣ Today",
-				"⚠ high ordering across nodes",
-				"touched src/ingest – dedupe here",
-				"context src/api",
-				"• events arrive twice",
-			],
-			"Explore puts the big picture (diagrams, risks) above the modules and findings",
+			["▣ Today", "touched src/ingest – dedupe here", "context src/api", "• events arrive twice"],
+			"Explore puts the big picture (diagrams) above the modules and findings",
 		);
 		assert.deepEqual(reviewLines(arch, "decide").slice(0, 2), [
 			"Where? → B In backend (only alarms)",
@@ -70,9 +63,10 @@ describe("review lines", () => {
 		]);
 		assert.equal(reviewLines(arch, "design")[0], "▣ Event flow");
 		assert.deepEqual(reviewLines(arch, "slice").slice(0, 2), ["1. Dedupe table", "2. Wire it (after 1)"]);
-		assert.deepEqual(reviewLines(arch, "blueprint").slice(0, 2), [
+		assert.deepEqual(reviewLines(arch, "blueprint"), [
 			"Dedupe: Fewer duplicate alarms",
 			"2 modules · 1 decisions · 1 diagrams · 2 slices",
+			"⚠ high ordering across nodes",
 		]);
 	});
 

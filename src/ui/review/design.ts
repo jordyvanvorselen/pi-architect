@@ -1,5 +1,5 @@
 import { sp, type Line } from "../spans.ts";
-import { risks, section, trim, type ReviewBody } from "./common.ts";
+import { section, trim, type ReviewBody } from "./common.ts";
 import { diagramLines } from "./diagram.ts";
 
 /** Design: every design diagram, with new, changed and removed parts highlighted. */
@@ -10,5 +10,5 @@ export const designBody: ReviewBody = (arch, width, paint) => {
 		? diagrams.flatMap((d, i) => [...(i ? [[]] : []), ...diagramLines(d, width, paint)])
 		: [[sp("No diagrams. The design is in the decisions and the chat.", "muted")]];
 	const right = count ? [sp(`${count} diagram${count === 1 ? "" : "s"}`, "dim")] : [];
-	return trim([...section("Diagrams", body, width, right), ...risks(arch, width)]);
+	return trim(section("Diagrams", body, width, right));
 };
