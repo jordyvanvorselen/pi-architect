@@ -265,7 +265,7 @@ describe("planSlices", () => {
 		const rejections = new Rejections();
 		const send = (slices: In[]) => {
 			try {
-				planSlices(at(), { slices }, undefined, rejections);
+				planSlices(at(), { slices }, rejections);
 				return "saved";
 			} catch (e) {
 				return (e as Error).message;
@@ -293,7 +293,7 @@ describe("planSlices", () => {
 	});
 
 	it("reports what the phase still needs", () => {
-		const plan = planSlices(at(), { slices: [good("s1")] }, (tool) => tool !== "architect_slice");
+		const plan = planSlices(at(), { slices: [good("s1", ["s9"]), good("s9")] });
 		assert.deepEqual(plan.details.missing, []);
 	});
 });

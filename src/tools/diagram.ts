@@ -78,11 +78,7 @@ export interface DiagramPlan {
  * Check the diagram and turn it into a `diagram` event, or a rejection with the linter's findings. Pure.
  * Throws for calls that cannot work at all: wrong phase, unknown id, approved plan.
  */
-export function planDiagram(
-	arch: Architecture,
-	input: DiagramInput,
-	options: { maxWidth?: number; has?: (tool: string) => boolean } = {},
-): DiagramPlan {
+export function planDiagram(arch: Architecture, input: DiagramInput, options: { maxWidth?: number } = {}): DiagramPlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
 	if (!diagramsAllowed(phase))
@@ -125,10 +121,7 @@ export function planDiagram(
 	};
 	const bodyLines = diagram.body.split("\n");
 	const cols = Math.max(0, ...bodyLines.map((l) => visibleWidth(l)));
-	const gaps = missing(
-		{ ...arch, diagrams: [...arch.diagrams.filter((d) => d.id !== diagram.id), diagram] },
-		options.has,
-	);
+	const gaps = missing({ ...arch, diagrams: [...arch.diagrams.filter((d) => d.id !== diagram.id), diagram] });
 	const next = readiness(phase, gaps);
 	const warnings = check.warnings ? ` ${check.summary.split("\n").slice(1).join("\n")}` : "";
 	const verb = old ? `Replaced diagram ${diagram.id}` : `Saved diagram ${diagram.id}`;
@@ -148,12 +141,8 @@ export function planDiagram(
 	};
 }
 
-export interface DiagramToolDeps extends ToolDeps {
-	has?(tool: string): boolean;
-}
-
 /** Register `architect_diagram`. */
-export function registerDiagramTool(pi: ExtensionAPI, deps: DiagramToolDeps): void {
+export function registerDiagramTool(pi: ExtensionAPI, deps: ToolDeps): void {
 	pi.registerTool({
 		name: "architect_diagram",
 		label: "Architect diagram",
@@ -170,7 +159,7 @@ export function registerDiagramTool(pi: ExtensionAPI, deps: DiagramToolDeps): vo
 		prepareArguments: prepareDiagramArgs,
 		async execute(_toolCallId, params) {
 			const arch = architecture(deps.state(), "architect_diagram");
-			const plan = planDiagram(arch, params, deps.has ? { has: deps.has } : {});
+			const plan = planDiagram(arch, params);
 			if (!plan.event) return { content: [{ type: "text", text: plan.text }], details: plan.details, isError: true };
 			deps.append(plan.event);
 			return { content: [{ type: "text", text: plan.text }], details: plan.details };

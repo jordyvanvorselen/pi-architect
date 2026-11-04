@@ -3,10 +3,8 @@ import { describe, it } from "node:test";
 import { architectSection, MODE_MESSAGE, modeNotice, modeToldToModel, phaseGuidance } from "../src/prompt.ts";
 import { newArchitecture } from "../src/state/reducer.ts";
 import { PHASES } from "../src/state/phases.ts";
+import { phaseTools } from "../src/tools/common.ts";
 import type { Architecture } from "../src/state/types.ts";
-
-const all = () => true;
-const none = () => false;
 
 function at(partial: Partial<Architecture> = {}): Architecture {
 	return { ...newArchitecture(1, "Dedupe", "dedupe"), ...partial };
@@ -15,53 +13,57 @@ function at(partial: Partial<Architecture> = {}): Architecture {
 describe("phase guidance", () => {
 	it("gives every phase a few short lines", () => {
 		for (const phase of PHASES) {
-			const lines = phaseGuidance(phase, all);
+			const lines = phaseGuidance(phase);
 			assert.ok(lines.length >= 1 && lines.length <= 3, phase);
 			for (const line of lines) assert.ok(line.length < 200, line);
 		}
 	});
 
-	it("names later tools only when they exist", () => {
-		assert.match(phaseGuidance("decide", all)[0]!, /architect_decide/);
-		assert.doesNotMatch(phaseGuidance("decide", none)[0]!, /architect_decide/);
-		assert.match(phaseGuidance("design", all)[0]!, /architect_diagram.*\[new\]/);
-		assert.doesNotMatch(phaseGuidance("design", none)[0]!, /architect_diagram/);
-		assert.match(phaseGuidance("slice", all)[0]!, /architect_slice/);
-		assert.doesNotMatch(phaseGuidance("slice", none)[0]!, /architect_slice/);
+	it("names the tool of each phase, and only tools that are active in it", () => {
+		assert.match(phaseGuidance("decide")[0]!, /architect_decide/);
+		assert.match(phaseGuidance("design")[0]!, /architect_diagram.*\[new\]/);
+		assert.match(phaseGuidance("slice")[0]!, /architect_slice/);
+		for (const phase of PHASES) {
+			const active = phaseTools({ ...at(), phase });
+			for (const tool of phaseGuidance(phase)
+				.join(" ")
+				.match(/architect_[a-z]+/g) ?? [])
+				assert.ok(active.includes(tool), `${phase} names ${tool}, which is off there`);
+		}
 	});
 
 	it("asks the agent to name an unnamed feature in Frame", () => {
-		assert.match(phaseGuidance("frame", all, at({ feature: "" }))[0]!, /architect_update\(\{ feature \}\)/);
-		assert.doesNotMatch(phaseGuidance("frame", all, at()).join(" "), /no name yet/);
+		assert.match(phaseGuidance("frame", at({ feature: "" }))[0]!, /architect_update\(\{ feature \}\)/);
+		assert.doesNotMatch(phaseGuidance("frame", at()).join(" "), /no name yet/);
 	});
 });
 
 describe("architectSection", () => {
 	it("is absent in build mode or without an architecture", () => {
-		assert.equal(architectSection({ mode: "build", architecture: at() }, all), undefined);
-		assert.equal(architectSection({ mode: "architect" }, all), undefined);
+		assert.equal(architectSection({ mode: "build", architecture: at() }), undefined);
+		assert.equal(architectSection({ mode: "architect" }), undefined);
 	});
 
 	it("states the feature, the phase, what to do and the rules", () => {
-		const text = architectSection({ mode: "architect", architecture: at({ phase: "explore" }) }, all)!;
+		const text = architectSection({ mode: "architect", architecture: at({ phase: "explore" }) })!;
 		assert.match(
 			text,
 			/^You are in architect mode, designing one feature before anyone builds it\. Feature: "Dedupe"\./,
 		);
 		assert.match(text, /\nPhase 2\/6: Explore\.\n- Read the code/);
 		assert.match(text, /Rules:\n- Architect mode is read-only/);
-		assert.match(text, /call architect_advance/);
+		assert.doesNotMatch(text, /skip/i);
 		const rules = text.split("\nDrawing diagrams")[0]!;
 		assert.ok(rules.length < 1200, `section is ${rules.length} characters without the drawing guide`);
 	});
 
 	it("says when the phase waits for review", () => {
-		const text = architectSection({ mode: "architect", architecture: at({ status: "review" }) }, all)!;
+		const text = architectSection({ mode: "architect", architecture: at({ status: "review" }) })!;
 		assert.match(text, /Phase 1\/6: Frame, waiting for review\. Call architect_advance to reopen it\./);
 	});
 
 	it("says the plan is final once approved", () => {
-		const text = architectSection({ mode: "architect", architecture: at({ feature: "", approvedAt: 3 }) }, all)!;
+		const text = architectSection({ mode: "architect", architecture: at({ feature: "", approvedAt: 3 }) })!;
 		assert.match(text, /Feature: not named yet\./);
 		assert.match(text, /plan is final/);
 		assert.match(text, /\/architect build/);

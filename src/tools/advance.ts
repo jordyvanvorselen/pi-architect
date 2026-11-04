@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type, type Static } from "typebox";
-import { diagramRules, phaseGuidance, type ToolCheck } from "../prompt.ts";
+import { diagramRules, phaseGuidance } from "../prompt.ts";
 import type { ReviewUi } from "../review.ts";
 import { nextPhase, PHASE_LABEL, PHASES, phaseIndex, type Phase } from "../state/phases.ts";
 import { missing } from "../state/queries.ts";
@@ -39,7 +39,6 @@ export type Finalized = { path: string } | { error: string };
 export interface AdvanceDeps extends ToolDeps {
 	review: ReviewUi;
 	now(): number;
-	has: ToolCheck;
 	/** Writes the plan file once the Blueprint is approved. */
 	finalize?(ctx: ExtensionContext): Promise<Finalized>;
 	/** Where approving the Blueprint will write the plan file, for the review screen. */
@@ -75,7 +74,7 @@ export async function advance(
 	const label = PHASE_LABEL[phase];
 	if (arch.approvedAt !== undefined) throw new Error("The plan is already approved. There is no next phase.");
 
-	const gaps = missing(arch, deps.has);
+	const gaps = missing(arch);
 	if (gaps.length)
 		return result(
 			`${label} is not ready for review. It still needs ${gaps.join(", ")}. Add it, then call architect_advance again.`,
@@ -149,12 +148,12 @@ export async function advance(
 			},
 		);
 	}
-	const guidance = phaseGuidance(next, deps.has, deps.state().architecture).map((line) => `- ${line}`);
+	const guidance = phaseGuidance(next, deps.state().architecture).map((line) => `- ${line}`);
 	return result(
 		[
 			`${label} approved.${note} Now in ${PHASE_LABEL[next]} (phase ${phaseIndex(next) + 1}/${PHASES.length}):`,
 			...guidance,
-			...diagramRules(next, deps.has),
+			...diagramRules(next),
 		].join("\n"),
 		{ phase, outcome: "approved", next, ...(comment ? { comment } : {}) },
 	);
@@ -170,7 +169,7 @@ export function registerAdvanceTool(pi: ExtensionAPI, deps: AdvanceDeps): void {
 			"otherwise you get the user's comment. When the phase is incomplete it fails at once with what is missing.",
 		promptSnippet: "Ask the user to review and approve the current architect phase",
 		promptGuidelines: [
-			"Call architect_advance when an architect phase is complete. The user approves every phase; never skip one.",
+			"Call architect_advance when an architect phase is complete. The user reviews it, and you wait for the verdict.",
 		],
 		parameters: AdvanceParams,
 		defaultActive: false,

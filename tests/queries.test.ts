@@ -107,15 +107,11 @@ describe("missing", () => {
 		assert.deepEqual(missing(at({ phase: "decide" })), []);
 	});
 
-	it("Design needs a diagram drawn in Design when the tool exists; Blueprint needs nothing extra", () => {
+	it("Design needs a diagram drawn in Design; Blueprint needs nothing extra", () => {
 		const diagram = (phase: "explore" | "design") => ({ id: "d1", phase, title: "t", body: "a ──▶ b" });
 		assert.deepEqual(missing(at({ phase: "design" })), ["at least one diagram"]);
 		assert.deepEqual(missing(at({ phase: "design", diagrams: [diagram("explore")] })), ["at least one diagram"]);
 		assert.deepEqual(missing(at({ phase: "design", diagrams: [diagram("design")] })), []);
-		assert.deepEqual(
-			missing(at({ phase: "design" }), (tool) => tool !== "architect_diagram"),
-			[],
-		);
 		assert.deepEqual(missing(at({ phase: "blueprint" })), []);
 	});
 
@@ -126,12 +122,5 @@ describe("missing", () => {
 			"s1 depends on unknown slice s2",
 		]);
 		assert.deepEqual(missing(at({ phase: "slice", slices: [slice("s1")] })), []);
-	});
-
-	it("Slice needs no slices while no tool can add them", () => {
-		assert.deepEqual(
-			missing(at({ phase: "slice" }), (tool) => tool !== "architect_slice"),
-			[],
-		);
 	});
 });
