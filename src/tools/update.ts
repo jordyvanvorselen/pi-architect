@@ -1,15 +1,26 @@
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type, type Static, type TUnsafe } from "typebox";
 import type { UpdateEvent } from "../state/events.ts";
-import { PHASE_LABEL, phaseIndex } from "../state/phases.ts";
+import { phaseIndex } from "../state/phases.ts";
 import { missing, nextId, slugify } from "../state/queries.ts";
 import type { Architecture, Finding, ModuleRef, ModuleRole, Risk, Severity } from "../state/types.ts";
+import type { Paint } from "../ui/paint.ts";
+import { updateCall, updateResult } from "../ui/tools.ts";
+import {
+	architecture,
+	clean as cleanAll,
+	List,
+	parseJson,
+	readiness,
+	textOf,
+	textRow,
+	type ToolDeps,
+} from "./common.ts";
 
 /** A plain string enum. Some providers reject the `anyOf` that a union of literals produces. */
 export function stringEnum<T extends string>(values: readonly T[], description: string): TUnsafe<T> {
 	return Type.Unsafe<T>({ type: "string", enum: [...values], description });
 }
-
-const List = (description: string) => Type.Array(Type.String(), { description });
 
 export const UpdateParams = Type.Object(
 	{
@@ -74,17 +85,6 @@ const ALIASES: Record<string, string> = {
 };
 const LIST_KEYS = new Set(["constraints", "out_of_scope", "done_when", "findings", "remove", "files"]);
 
-function parseJson(value: unknown): unknown {
-	if (typeof value !== "string") return value;
-	const trimmed = value.trim();
-	if (!/^[[{]/.test(trimmed)) return value;
-	try {
-		return JSON.parse(trimmed);
-	} catch {
-		return value;
-	}
-}
-
 function normalize(value: unknown, key?: string): unknown {
 	value = parseJson(value);
 	if (key && LIST_KEYS.has(key) && typeof value === "string") return [value];
@@ -127,8 +127,8 @@ export interface UpdatePlan {
 	details: UpdateDetails;
 }
 
-const clean = (items: readonly string[] | undefined) =>
-	items === undefined ? undefined : items.map((s) => s.trim()).filter(Boolean);
+/** Like `clean`, but keeps "not given" apart from "given empty": an empty list replaces the old one. */
+const clean = (items: readonly string[] | undefined) => (items === undefined ? undefined : cleanAll(items));
 const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
 
 /**
@@ -142,7 +142,6 @@ export function planUpdate(
 ): UpdatePlan {
 	if (arch.approvedAt !== undefined) throw new Error("The plan is approved and final. Nothing can change now.");
 	const phase = arch.phase;
-	const label = PHASE_LABEL[phase];
 	const index = phaseIndex(phase);
 	const changes: string[] = [];
 	const update: Omit<UpdateEvent, "v"> = { type: "update", phase };
@@ -257,10 +256,11 @@ export function planUpdate(
 
 	const after = applyPreview(arch, update);
 	const gaps = missing(after, has);
-	const next = gaps.length
-		? `${label} still needs ${gaps.join(", ")}.`
-		: `${label} is ready: call architect_advance when the user should review it.`;
-	return { event: update, text: `Updated ${changes.join(", ")}. ${next}`, details: { phase, changes, missing: gaps } };
+	return {
+		event: update,
+		text: `Updated ${changes.join(", ")}. ${readiness(phase, gaps)}`,
+		details: { phase, changes, missing: gaps },
+	};
 }
 
 /** The architecture as it will be after the update, for the readiness note. Only the fields `missing` reads. */
@@ -274,4 +274,40 @@ function applyPreview(arch: Architecture, update: Omit<UpdateEvent, "v">): Archi
 			...(update.modules ?? []),
 		].filter((m) => !update.remove?.includes(m.path)),
 	};
+}
+
+/** Register `architect_update`. Inactive by default, like every architect tool; architect mode turns it on. */
+export function registerUpdateTool(pi: ExtensionAPI, deps: ToolDeps & { has?: (tool: string) => boolean }): void {
+	pi.registerTool({
+		name: "architect_update",
+		label: "Architect update",
+		description:
+			"Record content of the current architect phase and return at once: feature name, brief (Frame), modules and findings " +
+			"(Explore and later), risks (any phase). Lists in brief replace the old list, modules update by path, " +
+			"a risk with an id changes that risk. remove takes finding or risk ids and module paths.",
+		promptSnippet: "Record the brief, modules, findings and risks of the current architect phase",
+		promptGuidelines: [
+			"Use architect_update to record phase content as you go. The user sees it on screen, so do not repeat it in chat.",
+		],
+		parameters: UpdateParams,
+		defaultActive: false,
+		prepareArguments: prepareUpdateArgs,
+		async execute(_toolCallId, params) {
+			const plan = planUpdate(architecture(deps.state(), "architect_update"), params, deps.has);
+			deps.append(plan.event);
+			return { content: [{ type: "text", text: plan.text }], details: plan.details };
+		},
+		renderCall: (args, theme, context) => textRow(context, updateCall(args, theme as Paint)),
+		renderResult: (result, { expanded }, theme, context) =>
+			textRow(
+				context,
+				updateResult(
+					result.details as UpdateDetails | undefined,
+					textOf(result.content),
+					expanded,
+					context.isError,
+					theme as Paint,
+				),
+			),
+	});
 }

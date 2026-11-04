@@ -14,11 +14,11 @@ import { ENTRY_TYPE, event, type ArchitectEvent, type EventInput } from "./state
 import { slugify } from "./state/queries.ts";
 import { INITIAL_STATE, isApproved, isPristine, rebuild, reduce } from "./state/reducer.ts";
 import type { ArchitectState, Mode } from "./state/types.ts";
-import { advance, AdvanceParams, type AdvanceDetails, type Finalized } from "./tools/advance.ts";
-import { planSlices, prepareSliceArgs, SliceParams, type SliceDetails } from "./tools/slice.ts";
+import { registerAdvanceTool, type Finalized } from "./tools/advance.ts";
 import { registerDecideTool } from "./tools/decide.ts";
 import { registerDiagramTool } from "./tools/diagram.ts";
-import { planUpdate, prepareUpdateArgs, UpdateParams, type UpdateDetails } from "./tools/update.ts";
+import { registerSliceTool } from "./tools/slice.ts";
+import { registerUpdateTool } from "./tools/update.ts";
 import { BOARD_HINT, BOARD_SHORTCUT, openBoard, type BoardScreen } from "./ui/board/index.ts";
 import { createDecisionCard } from "./ui/decision/index.ts";
 import { choiceEntry, SpanView, verdictEntry } from "./ui/entries.ts";
@@ -26,9 +26,7 @@ import type { Paint } from "./ui/paint.ts";
 import { createPhaseReview } from "./ui/review/index.ts";
 import { STATUS_KEY, modeStatus } from "./ui/status.ts";
 import { renderBuildProgress, type BuildView } from "./ui/progress.ts";
-import { sliceCall, sliceResult } from "./ui/slice.ts";
 import { LineComponent, renderStepper } from "./ui/stepper.ts";
-import { advanceCall, advanceResult, updateCall, updateResult } from "./ui/tools.ts";
 
 export { ENTRY_TYPE } from "./state/events.ts";
 export const WIDGET_KEY = "architect";
@@ -64,9 +62,6 @@ export interface ArchitectOverrides {
 	/** Opens a file in the default app, for `/architect plan open`. */
 	open?: (file: string) => Promise<void>;
 }
-
-const textOf = (result: { content: { type: string; text?: string }[] }) =>
-	result.content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("\n");
 
 export default function architectExtension(pi: ExtensionAPI, overrides: ArchitectOverrides = {}): void {
 	const now = overrides.now ?? Date.now;
@@ -292,130 +287,12 @@ export default function architectExtension(pi: ExtensionAPI, overrides: Architec
 		type: "string",
 	});
 
-	pi.registerTool({
-		name: "architect_update",
-		label: "Architect update",
-		description:
-			"Record content of the current architect phase and return at once: feature name, brief (Frame), modules and findings " +
-			"(Explore and later), risks (any phase). Lists in brief replace the old list, modules update by path, " +
-			"a risk with an id changes that risk. remove takes finding or risk ids and module paths.",
-		promptSnippet: "Record the brief, modules, findings and risks of the current architect phase",
-		promptGuidelines: [
-			"Use architect_update to record phase content as you go. The user sees it on screen, so do not repeat it in chat.",
-		],
-		parameters: UpdateParams,
-		defaultActive: false,
-		prepareArguments: prepareUpdateArgs,
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			ctxRef = ctx;
-			const arch = state.architecture;
-			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_update only works in architect mode. The user switches with /architect.");
-			const plan = planUpdate(arch, params, has);
-			append(plan.event);
-			return { content: [{ type: "text", text: plan.text }], details: plan.details };
-		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(updateCall(args, theme as Paint));
-			return text;
-		},
-		renderResult(result, { expanded }, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
-				updateResult(
-					result.details as UpdateDetails | undefined,
-					textOf(result),
-					expanded,
-					context.isError,
-					theme as Paint,
-				),
-			);
-			return text;
-		},
-	});
-
-	pi.registerTool({
-		name: "architect_advance",
-		label: "Architect advance",
-		description:
-			"Ask the user to review the current architect phase, and wait. Approval moves to the next phase; " +
-			"otherwise you get the user's comment. When the phase is incomplete it fails at once with what is missing.",
-		promptSnippet: "Ask the user to review and approve the current architect phase",
-		promptGuidelines: [
-			"Call architect_advance when an architect phase is complete. The user approves every phase; never skip one.",
-		],
-		parameters: AdvanceParams,
-		defaultActive: false,
-		executionMode: "sequential",
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			ctxRef = ctx;
-			return advance(
-				{ state: () => state, append, review, now, has, finalize: writePlanFile, planTarget },
-				params,
-				signal,
-				ctx,
-			);
-		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(advanceCall(args, theme as Paint));
-			return text;
-		},
-		renderResult(result, { isPartial }, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
-				advanceResult(result.details as AdvanceDetails | undefined, textOf(result), isPartial, theme as Paint),
-			);
-			return text;
-		},
-	});
-
-	registerDiagramTool(pi, { state: () => state, append, has });
-	registerDecideTool(pi, { state: () => state, append, ui: overrides.decide ?? createDecisionCard(screens) });
-
-	pi.registerTool({
-		name: "architect_slice",
-		label: "Architect slice",
-		description:
-			"Define every slice of the plan and return at once with the build order. Each slice has an id, title, goal, " +
-			"depends_on (ids), files, concrete steps and exact verify commands. Replaces the earlier list, so send all " +
-			"slices each time. Fails with every problem when slices are vague, unverifiable or depend in a cycle.",
-		promptSnippet: "Define the buildable slices of the architect plan with their dependencies and verify commands",
-		promptGuidelines: [
-			"Use architect_slice in the Slice phase. A builder with no other context follows each step, so name the file, function or type in every step.",
-		],
-		parameters: SliceParams,
-		defaultActive: false,
-		prepareArguments: prepareSliceArgs,
-		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			ctxRef = ctx;
-			const arch = state.architecture;
-			if (state.mode !== "architect" || !arch)
-				throw new Error("architect_slice only works in architect mode. The user switches with /architect.");
-			const plan = planSlices(arch, params, has);
-			append(plan.event);
-			return { content: [{ type: "text", text: plan.text }], details: plan.details };
-		},
-		renderCall(args, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(sliceCall(args, theme as Paint));
-			return text;
-		},
-		renderResult(result, { expanded }, theme, context) {
-			const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-			text.setText(
-				sliceResult(
-					result.details as SliceDetails | undefined,
-					textOf(result),
-					expanded,
-					context.isError,
-					theme as Paint,
-				),
-			);
-			return text;
-		},
-	});
+	const tools = { state: () => state, append, has };
+	registerUpdateTool(pi, tools);
+	registerAdvanceTool(pi, { ...tools, review, now, finalize: writePlanFile, planTarget });
+	registerDiagramTool(pi, tools);
+	registerDecideTool(pi, { ...tools, ui: overrides.decide ?? createDecisionCard(screens) });
+	registerSliceTool(pi, tools);
 
 	pi.registerEntryRenderer<ArchitectEvent>(ENTRY_TYPE, (entry, options, theme) => {
 		const e = entry.data;
