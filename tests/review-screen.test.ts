@@ -244,6 +244,17 @@ describe("phase review screens", () => {
 		assert.equal(tree.children[0]!.name, "a/b");
 	});
 
+	it("shows a module whose path is a file as a file, without the files that repeat its path", () => {
+		const arch = {
+			...ARCH,
+			modules: [{ path: "src/todo.ts", role: "touched" as const, files: ["todo.ts", "src/todo.ts"] }],
+		};
+		const t = text("explore", 80, arch);
+		assert.match(t, /● src\/todo\.ts\s/);
+		assert.doesNotMatch(t, /todo\.ts\//);
+		assert.equal((t.match(/todo\.ts/g) ?? []).length, 1);
+	});
+
 	it("Decide shows each decision with the choice, the comment and the rejected options", () => {
 		const t = text("decide");
 		assert.match(t, /DECISIONS +3 decided · 1 open/);

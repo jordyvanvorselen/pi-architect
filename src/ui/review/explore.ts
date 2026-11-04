@@ -27,7 +27,10 @@ function child(parent: Node, name: string): Node {
 	return node;
 }
 
-/** Module paths as a tree. Files hang under their module, relative to it. */
+/**
+ * Module paths as a tree. Files hang under their module, relative to it. A file that only repeats the module
+ * path, like `todo.ts` under the module `src/todo.ts`, is left out, so a module that is a file shows as one.
+ */
 export function moduleTree(modules: readonly ModuleRef[]): Node {
 	const root: Node = { name: "", children: [] };
 	for (const module of modules) {
@@ -36,6 +39,7 @@ export function moduleTree(modules: readonly ModuleRef[]): Node {
 		for (const part of parts) node = child(node, part);
 		node.module = module;
 		for (const file of module.files) {
+			if (file === module.path || module.path.endsWith(`/${file}`)) continue;
 			const relative = file.startsWith(`${module.path}/`) ? file.slice(module.path.length + 1) : file;
 			if (!node.children.some((c) => c.file && c.name === relative))
 				node.children.push({ name: relative, children: [], file: true });
