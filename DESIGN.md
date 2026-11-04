@@ -149,7 +149,7 @@ The agent draws each diagram itself in Unicode box characters. A diagram has a t
 The agent marks parts with `[new]`, `[changed]` or `[removed]`.
 
 The extension does not lay anything out. It checks the diagram, for example that it fits the width.
-It repairs slips with one clear reading first: a corner or a box side exactly one column off, and a line that meets a box edge without a junction.
+It repairs slips with one clear reading first: a corner or a box side one or two columns off, a corner of the other style (`┐` among `╭ ╰ ╯`), and a line that meets a box edge without a junction. A side two columns off is moved only when every row is off the same way, with only spaces in between. Mixed corner styles are a warning.
 A repair is kept only when the linter then finds less and nothing new. The agent hears what changed, so a revision keeps it. Anything else is rejected with findings.
 It shows the diagram in theme colours, with the `[new]`, `[changed]` and `[removed]` parts highlighted.
 

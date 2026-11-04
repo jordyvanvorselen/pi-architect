@@ -113,6 +113,7 @@ function checkBoxes(grid: Grid, report: Report, explained: Set<string>): void {
 					report(first, col, "error", `box side │ missing${more} (${opened}).${sideHint(grid, box, first, col)}`);
 				}
 				if (badLeft.length || badRight.length) explain(explained, box);
+				else checkCorners(grid, report, box, opened);
 				continue;
 			}
 			const leftEnd = run(grid, top, left);
@@ -130,6 +131,64 @@ function checkBoxes(grid: Grid, report: Report, explained: Set<string>): void {
 			}
 		}
 	}
+}
+
+/** Rounded and square light corners, top left, top right, bottom left, bottom right. */
+export const CORNER_STYLES = { rounded: "╭╮╰╯", square: "┌┐└┘" } as const;
+
+/** The corner of the other style in the same place: `╮` for `┐`. */
+export function matchingCorner(ch: string, style: keyof typeof CORNER_STYLES): string | undefined {
+	for (const chars of Object.values(CORNER_STYLES)) {
+		const i = chars.indexOf(ch);
+		if (i >= 0) return CORNER_STYLES[style][i];
+	}
+	return undefined;
+}
+
+/** The style most corners of a box share, when exactly one corner differs. */
+export function oddCorner(
+	corners: readonly string[],
+): { index: number; style: keyof typeof CORNER_STYLES } | undefined {
+	const styles = corners.map((ch) =>
+		CORNER_STYLES.rounded.includes(ch) ? "rounded" : CORNER_STYLES.square.includes(ch) ? "square" : undefined,
+	);
+	if (styles.some((s) => s === undefined)) return undefined;
+	for (const style of ["rounded", "square"] as const) {
+		const others = styles.filter((s) => s !== style);
+		if (others.length === 1) return { index: styles.findIndex((s) => s !== style), style };
+	}
+	return undefined;
+}
+
+/** A closed box whose light corners mix ╭ and ┌ styles. Not wrong, but it looks like a slip. */
+function checkCorners(grid: Grid, report: Report, box: Box, opened: string): void {
+	const cells: [number, number][] = [
+		[box.top, box.left],
+		[box.top, box.right],
+		[box.bottom, box.left],
+		[box.bottom, box.right],
+	];
+	const corners = cells.map(([r, c]) => grid.at(r, c));
+	const rounded = corners.filter((ch) => CORNER_STYLES.rounded.includes(ch)).length;
+	const square = corners.filter((ch) => CORNER_STYLES.square.includes(ch)).length;
+	if (!rounded || !square || rounded + square !== 4) return;
+	const odd = oddCorner(corners);
+	if (odd) {
+		const [r, c] = cells[odd.index]!;
+		const ch = corners[odd.index]!;
+		report(
+			r,
+			c,
+			"warning",
+			`corner ${ch} does not match the other corners of the box (${opened}). Use ${matchingCorner(ch, odd.style)}.`,
+		);
+	} else
+		report(
+			box.top,
+			box.right,
+			"warning",
+			`the corners of the box mix ╭ and ┌ styles (${opened}). Use ╭╮╰╯ or ┌┐└┘ for all four.`,
+		);
 }
 
 /** Rows between the top and bottom of a box where `col` does not carry its side. */

@@ -66,6 +66,13 @@ const EXPECTED: Record<string, [number, number, "error" | "warning", string][]> 
 	"top-short.txt": [[1, 9, "error", "╮ is 1 col off: it must be at col 10"]],
 	"ambiguous-sides.txt": [[4, 10, "error", "╯ is 1 col off"]],
 	"line-into-line.txt": [[2, 2, "warning", "─ runs into │ to its right"]],
+	"side-two-off.txt": [[2, 9, "error", "This line's │ is at col 11, 2 cols too far right"]],
+	"corner-side-two-off.txt": [[1, 9, "error", "╮ is 2 cols off: it must be at col 11"]],
+	"top-two-long.txt": [[1, 11, "error", "╮ is 2 cols off: it must be at col 9"]],
+	"side-drift-uneven.txt": [[2, 9, "error", "This line's │ is at col 11, 2 cols too far right"]],
+	"side-two-off-text.txt": [[2, 7, "error", "This line's │ is at col 9, 2 cols too far right"]],
+	"mixed-corners.txt": [[1, 9, "warning", "corner ┐ does not match the other corners of the box"]],
+	"mixed-corners-even.txt": [[1, 9, "warning", "the corners of the box mix ╭ and ┌ styles"]],
 };
 
 describe("diagram linter on broken diagrams", () => {

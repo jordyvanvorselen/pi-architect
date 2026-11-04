@@ -22,10 +22,18 @@ const REPAIRED: Record<string, string[] | null> = {
 	"side-one-off.txt": ["╭───────╮", "│ Panel │", "│ Proc  │", "╰───────╯"],
 	"junction-outside.txt": ["      ╭───────╮", "──────┤Panel  │", "      ╰───────╯"],
 	"crossing-no-junction.txt": ["╭─────╮    ╭─────╮", "│ A   ├────┤ B   │", "╰─────╯    ╰─────╯"],
+	"side-two-off.txt": ["╭───────╮", "│ Panel │", "│ Proc  │", "╰───────╯"],
+	"corner-side-two-off.txt": ["╭─────────╮", "│ Panel   │", "│ Proc    │", "╰─────────╯"],
+	"top-two-long.txt": ["╭───────╮", "│ Panel │", "│ Proc  │", "╰───────╯"],
+	"mixed-corners.txt": ["╭───────╮", "│ Panel │", "╰───────╯"],
 	"missing-arm.txt": ["╭───────╮", "│ Panel │", "╰───┬───╯", "    │", "    ▼", "╭───────╮", "│ Proc  │", "╰───────╯"],
 	// Two columns off, a side that is gone, two different side columns, a junction against a junction,
 	// wide characters, and lines that meet no box: more than one reading, or none.
 	"ragged.txt": null,
+	// A side that drifts unevenly, text in the way, and corners two and two of each style.
+	"side-drift-uneven.txt": null,
+	"side-two-off-text.txt": null,
+	"mixed-corners-even.txt": null,
 	"short-side.txt": null,
 	"ambiguous-sides.txt": null,
 	"bus-misaligned.txt": null,
