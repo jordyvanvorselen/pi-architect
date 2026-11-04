@@ -58,7 +58,7 @@ Put a feature name in quotes to use it as written: `/architect "Build pipeline"`
 
 On the decision card: ←/→, tab or 1–4 move, ↵ chooses, `c` chooses with a comment, `n` adds your own option, `?` asks a question, `b` opens the board, esc closes.
 On a review screen: ↑/↓, PgUp/PgDn, space, Home and End scroll, ↵ approves, `r` requests changes, `b` opens the board, esc closes.
-Closing a review without a verdict stops the agent, so esc asks first. `/architect review` opens it again.
+Closing a card or a review without an answer stops the agent, so esc asks first. `/architect review` opens a closed review again.
 
 The board shows the whole design on one screen, with a tab for the brief, the code map, decisions, diagrams, risks, slices and the plan.
 Switch tabs with 1–7 or tab, move with ↑/↓, open an item with ↵. Press `c` on anything to comment on it.

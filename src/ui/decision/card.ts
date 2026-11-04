@@ -2,6 +2,7 @@ import type { Decision, DecisionOption } from "../../state/types.ts";
 import { meter } from "../meter.ts";
 import {
 	box,
+	confirmLines,
 	clipLine,
 	columns,
 	hintLines,
@@ -36,7 +37,12 @@ export interface DecisionView {
 	editor?: (width: number) => Line[];
 	/** Rows the card may use. A taller side-by-side layout folds into a list. */
 	maxRows?: number;
+	/** esc was pressed: the card asks before it closes without a choice. */
+	closing?: boolean;
 }
+
+/** What esc asks before the card closes without a choice. */
+export const CLOSE_CARD_QUESTION = "Close without choosing? The agent will stop.";
 
 /** Narrowest option card, borders included. Narrower and the options fold into a list. */
 export const MIN_CARD = 22;
@@ -204,7 +210,7 @@ function browseHints(inner: number, move: string, board: boolean): Line[] {
 	] as const;
 	if (lineWidth(hints(wide)) <= inner) return [hints(wide)];
 	return hintLines(
-		[["↵", "choose"], ["c", "comment"], ["n", "own"], ["?", "ask"], [move, "move"], ...extra, ["esc", "close"]],
+		[["↵", "choose"], ["c", "comment"], ["n", "own option"], ["?", "ask"], [move, "move"], ...extra, ["esc", "close"]],
 		inner,
 	);
 }
@@ -271,6 +277,12 @@ function body(view: DecisionView, inner: number, layout: CardLayout): Line[] {
 				: [sp(EDIT_LABEL[view.mode], "accent")];
 		lines.push([], clipLine(label, inner), ...(view.editor?.(inner) ?? []));
 		lines.push(...editHints(inner));
+	} else if (view.closing) {
+		const keys = [
+			["↵", "close"],
+			["esc", "back"],
+		] as const;
+		lines.push([], ...confirmLines(CLOSE_CARD_QUESTION, keys, inner));
 	} else {
 		lines.push([], ...browseHints(inner, layout.kind === "list" ? "↑↓" : "←→", view.board === true));
 	}

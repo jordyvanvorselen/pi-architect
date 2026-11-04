@@ -298,14 +298,30 @@ describe("decision card keys", () => {
 		assert.deepEqual(q.answers, [{ kind: "ask", question: "why not B?" }]);
 	});
 
-	it("esc steps back from an editor and keeps the draft; esc again closes", () => {
+	it("esc steps back from an editor and keeps the draft; esc again asks, and ↵ closes", () => {
 		const c = card();
 		c.keys("n", ...type("draft"), KEYS.escape);
 		assert.deepEqual(c.component.state, { focus: "A", mode: "browse" });
 		assert.deepEqual(c.answers, []);
 		c.keys("n");
 		assert.ok(c.lines(100).some((l) => l.includes("draft")));
-		c.keys(KEYS.escape, KEYS.escape);
+		c.keys(KEYS.escape, KEYS.escape, KEYS.enter);
+		assert.deepEqual(c.answers, [undefined]);
+	});
+
+	it("esc asks before closing without a choice, because the agent stops: ↵ closes, esc goes back", () => {
+		const c = card();
+		c.keys(KEYS.right, KEYS.escape);
+		assert.match(c.lines(100).join("\n"), /Close without choosing\? The agent will stop\. {2}↵ close {2}esc back/);
+		const narrow = c.lines(40).join("\n");
+		assert.match(narrow, /Close without choosing\?/);
+		assert.match(narrow, /↵ close {2}esc back/);
+		c.keys("c", KEYS.left, "1");
+		assert.deepEqual(c.component.state, { focus: "B", mode: "browse" }, "other keys wait for the answer");
+		c.keys(KEYS.escape);
+		assert.match(c.lines(100).join("\n"), /↵ choose/);
+		assert.deepEqual(c.answers, []);
+		c.keys(KEYS.escape, KEYS.enter);
 		assert.deepEqual(c.answers, [undefined]);
 	});
 
@@ -361,9 +377,9 @@ describe("decision card grace period", () => {
 		assert.deepEqual(c.answers, [{ kind: "ask", question: "b" }]);
 	});
 
-	it("still closes with esc during the grace period", () => {
+	it("still closes with esc and ↵ during the grace period", () => {
 		const c = card({}, 200, { now: () => 0 });
-		c.keys(KEYS.escape);
+		c.keys(KEYS.escape, KEYS.enter);
 		assert.deepEqual(c.answers, [undefined]);
 	});
 

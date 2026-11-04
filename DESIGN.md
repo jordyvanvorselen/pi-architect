@@ -113,6 +113,7 @@ The model gives 2 to 4 options with pros, cons, effort, risk and one recommendat
 
 - ←/→, tab and 1–4 move between options. Focus starts on the recommendation. ↵ chooses. `b` opens the board.
 - `c` chooses with a comment, `n` writes an own option, `?` asks a question instead. Each opens an editor inside the card.
+- esc closes the card without a choice, which stops the agent, so it asks first: `Close without choosing? The agent will stop.  ↵ close  esc back`.
 - Four options sit two by two when a row does not fit. On narrow or short terminals the options fold into a list with the focused one open.
 - The choice and any comment go back to the model as the tool result. "Pick B, but only for alarms" is a valid answer.
   An own option is recorded as a new option and chosen. A question goes back to the model, which answers and asks again with the same id.
@@ -213,7 +214,7 @@ An editor opens at the bottom: `↵ save  shift+↵ new line  esc back`, worded 
 
 - A comment shows under its item. The tab gets a `✎1`, the title says `✎ 2 to send` and the bottom edge lists the items, like `✎ q2 · slice 3`.
 - `c` on an item with a comment edits it. Saving it empty or pressing `x` removes it. `m` jumps to the next comment, on any tab. Clicking an item in the bottom edge jumps to it.
-- Closing the board with comments asks first, in the bottom bar: `Send 2 comments to the agent?  ↵ send  d discard  esc keep editing`.
+- Closing the board with comments asks first, in the bottom bar: `Send 2 comments to the agent?  ↵ send  d discard  esc back`.
   Without comments the board closes at once.
 - Sent comments go to the agent as one user message:
 

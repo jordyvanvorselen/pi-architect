@@ -104,7 +104,7 @@ describe("architect_decide", () => {
 	});
 
 	it("passes the user's comment and the expected total, and names what is still open", async () => {
-		const ui = new FakeUi().keys([KEYS.escape], ["c", ...type("only alarms"), KEYS.enter]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter], ["c", ...type("only alarms"), KEYS.enter]);
 		const h = await session(ui);
 		await h.call("architect_decide", { ...INPUT, question: "First?" });
 		const result = await h.call("architect_decide", { ...INPUT, total: 3 });
@@ -120,7 +120,7 @@ describe("architect_decide", () => {
 	});
 
 	it("counts only raised decisions as N/M, and shows the agent's estimate as one", async () => {
-		const ui = new FakeUi().keys([KEYS.escape], [KEYS.escape], [KEYS.escape], [KEYS.escape]);
+		const ui = new FakeUi().keys(...Array.from({ length: 4 }, () => [KEYS.escape, KEYS.enter]));
 		const h = await session(ui);
 		await h.call("architect_decide", { ...INPUT, total: 2 });
 		await h.call("architect_decide", { ...INPUT, question: "Second?" });
@@ -180,7 +180,7 @@ describe("architect_decide", () => {
 	});
 
 	it("re-asks the same open question under its id even without one", async () => {
-		const ui = new FakeUi().keys([KEYS.escape], [KEYS.enter]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter], [KEYS.enter]);
 		const h = await session(ui);
 		await h.call("architect_decide", INPUT);
 		const result = await h.call("architect_decide", {
@@ -192,7 +192,7 @@ describe("architect_decide", () => {
 	});
 
 	it("a closed card stops the agent and leaves the decision open", async () => {
-		const ui = new FakeUi().keys([KEYS.escape]);
+		const ui = new FakeUi().keys([KEYS.escape, KEYS.enter]);
 		const h = await session(ui);
 		const result = await h.call("architect_decide", INPUT);
 		assert.equal(result.terminate, true);

@@ -22,6 +22,8 @@ export class DecisionCard implements Component, Focusable {
 	private readonly done: (answer: DecisionAnswer | undefined) => void;
 	private focus: number;
 	private mode: DecisionMode = "browse";
+	/** esc was pressed in browse mode: the card asks before it closes. */
+	private closing = false;
 	private editor: InlineEditor | undefined;
 	/** What the user typed per editor, kept when they step back with esc. */
 	private readonly drafts = new Map<DecisionMode, string>();
@@ -107,12 +109,22 @@ export class DecisionCard implements Component, Focusable {
 			}
 			return;
 		}
+		if (this.closing) {
+			if (matchesKey(data, Key.enter)) this.done(undefined);
+			else if (matchesKey(data, Key.escape)) {
+				this.closing = false;
+				this.changed();
+			}
+			return;
+		}
 		const count = this.request.decision.options.length;
 		if (matchesKey(data, Key.left) || matchesKey(data, Key.up) || matchesKey(data, Key.shift("tab"))) this.move(-1);
 		else if (matchesKey(data, Key.right) || matchesKey(data, Key.down) || matchesKey(data, Key.tab)) this.move(1);
 		else if (/^[1-4]$/.test(data) && Number(data) <= count) this.move(Number(data) - 1 - this.focus);
-		else if (matchesKey(data, Key.escape)) this.done(undefined);
-		else if (matchesKey(data, "b") && this.board) this.board();
+		else if (matchesKey(data, Key.escape)) {
+			this.closing = true;
+			this.changed();
+		} else if (matchesKey(data, "b") && this.board) this.board();
 		else if (this.grace.active) return;
 		else if (matchesKey(data, Key.enter))
 			this.done({ kind: "choose", option: this.request.decision.options[this.focus]!.id });
@@ -139,6 +151,7 @@ export class DecisionCard implements Component, Focusable {
 				...(feature ? { feature } : {}),
 				...(editor ? { editor: (w: number) => editor.lines(w) } : {}),
 				maxRows: rows,
+				...(this.closing ? { closing: true } : {}),
 			},
 			width,
 		).map((line) => paintLine(line, this.paint));

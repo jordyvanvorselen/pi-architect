@@ -266,6 +266,17 @@ export function hints(pairs: readonly (readonly [string, string])[]): Line {
 	return line;
 }
 
+/**
+ * A question with its answer keys, `Close without a verdict? The agent will stop.  ↵ close  esc back`, on one
+ * line when it fits, else the question wrapped above the keys.
+ */
+export function confirmLines(question: string, pairs: readonly (readonly [string, string])[], inner: number): Line[] {
+	const keys = hints(pairs);
+	const ask = sp(question, "warning", true);
+	if (lineWidth([ask]) + 2 + lineWidth(keys) <= inner) return [[ask, sp("  "), ...keys]];
+	return [...wrap(question, inner).map((l) => [sp(l, "warning", true)]), clipLine(keys, inner)];
+}
+
 /** Pack key hints into as few lines as fit. */
 export function hintLines(pairs: readonly (readonly [string, string])[], inner: number): Line[] {
 	const lines: Line[] = [];

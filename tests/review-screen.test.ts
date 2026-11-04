@@ -437,7 +437,8 @@ describe("phase review keys", () => {
 			lines.some((l) => l.endsWith("┃")),
 			"scrollbar thumb",
 		);
-		assert.match(lines.at(-2)!, /↑↓ scroll/);
+		assert.match(lines.at(-2)!, /↵ approve Slice {2}r request changes {2}↑↓ pgup pgdn scroll {2}esc close/);
+		assert.match(s.lines(60).at(-2)!, /│ {2}↵ approve {2}r changes {2}↑↓ scroll {2}esc close +│/, "one row at 60");
 		s.keys(KEYS.down, "j");
 		assert.equal(s.component.state.scroll, 2);
 		lines = s.lines(80);
@@ -629,7 +630,7 @@ describe("review screen grace period", () => {
 		const s = screen("blueprint", ARCH, 14, undefined, { now: () => 0, board: () => boards++ });
 		assert.match(
 			s.lines(100).join("\n"),
-			/↵ approve Blueprint {2}r request changes {2}↑↓ scroll {2}b board {2}esc close/,
+			/↵ approve Blueprint {2}r request changes {2}↑↓ pgup pgdn scroll {2}b board {2}esc close/,
 		);
 		s.keys(KEYS.down, KEYS.down, "b");
 		assert.equal(boards, 1);

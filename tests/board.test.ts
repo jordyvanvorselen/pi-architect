@@ -495,13 +495,13 @@ describe("board comments", () => {
 		assert.equal(b.closed()!.length, 3, "closes once");
 	});
 
-	it("asks before closing with comments: ↵ sends them, d discards them, esc keeps editing", () => {
+	it("asks before closing with comments: ↵ sends them, d discards them, esc goes back", () => {
 		const b = board(architect(), { tab: "risks" });
 		b.press("c", ...type("watch this"), KEYS.enter, "q");
 		assert.equal(b.screen.state.confirming, true);
 		assert.equal(b.closed(), undefined);
 		let text = b.lines().join("\n");
-		assert.match(text, /│ +Send 1 comment to the agent\? {2}↵ send {2}d discard {2}esc keep editing +│/);
+		assert.match(text, /│ +Send 1 comment to the agent\? {2}↵ send {2}d discard {2}esc back +│/);
 		assert.doesNotMatch(text, /1-7 tabs/);
 		b.press("c", "x", "m", KEYS.down, "q");
 		assert.deepEqual(
@@ -537,7 +537,7 @@ describe("board comments", () => {
 			b.press("c", "y", KEYS.enter, KEYS.down, "c", "z", KEYS.enter, "q");
 			return b.lines().join("\n");
 		};
-		assert.match(at(100), /Send 2 comments to the agent\? {2}↵ send {2}d discard {2}esc keep editing/);
+		assert.match(at(100), /Send 2 comments to the agent\? {2}↵ send {2}d discard {2}esc back/);
 		assert.match(at(50), /Send 2 comments\? {2}↵ send {2}d discard {2}esc back/);
 		assert.match(at(40), /│ Send 2\? {2}↵ send {2}d discard {2}esc back +│/);
 		assert.match(at(30), /│ Send 2\? {2}↵ {2}d {2}esc +│/);
