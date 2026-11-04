@@ -159,6 +159,8 @@ The stepper and the build widget show `ctrl+alt+b board` while there is room for
 Pi runs extension shortcuts only from the main editor, so `ctrl+alt+b` does nothing while a decision card or review screen is open.
 There, `b` opens the board on top. It is read-only: the card or the screen is where the user answers, and the agent waits for that answer.
 Closing the board returns to the card or the screen exactly as it was.
+When the agent opens a card or a review screen while the board is open, the board closes first, so the card never opens unseen behind it.
+Unsent comments stay as a draft and are back the next time the board opens.
 
 ```
 ╭─ ◆ Board  Dedupe panel events ───────────────────────────────────────────────────────────────╮
